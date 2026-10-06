@@ -2,6 +2,8 @@ package com.banklab.fdservice.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Response of POST /fd-accounts/{accountId}/withdraw — the lab manual L15 response
@@ -20,5 +22,7 @@ public record PrematureWithdrawalResponse(
         BigDecimal finalInterest,
         BigDecimal penaltyApplied,
         BigDecimal withdrawalAmount,
-        FdAccount account) {
+        FdAccount account,
+        UUID txnGrpId,
+        List<Long> transactionIds) {
 }

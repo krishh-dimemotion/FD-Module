@@ -43,6 +43,28 @@ class PrematureWithdrawalPolicyTest {
     }
 
     @Test
+    void roundsOnceAfterAddingFlatFee() {
+        PrematureWithdrawalPolicy policy = new PrematureWithdrawalPolicy(BigDecimal.ONE, new BigDecimal("0.004"));
+        assertThat(policy.penalty(new BigDecimal("0.40"), BigDecimal.TEN, 2)).isEqualByComparingTo("0.01");
+    }
+
+    @Test
+    void roundsToZeroDecimalCurrencyAndIgnoresNegativeInterest() {
+        assertThat(onePercent.penalty(new BigDecimal("3552"), new BigDecimal("100000"), 0))
+                .isEqualByComparingTo("36");
+        assertThat(onePercent.penalty(new BigDecimal("-1"), BigDecimal.TEN, 2)).isZero();
+        assertThat(onePercent.penalty(BigDecimal.TEN, BigDecimal.ZERO, 2)).isZero();
+    }
+
+    @Test
+    void nullSettingsAreRejected() {
+        assertThatThrownBy(() -> new PrematureWithdrawalPolicy(null, BigDecimal.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PrematureWithdrawalPolicy(BigDecimal.ONE, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void negativeSettingsAreRejected() {
         assertThatThrownBy(() -> new PrematureWithdrawalPolicy(new BigDecimal("-1"), BigDecimal.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);

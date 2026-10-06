@@ -16,9 +16,9 @@ import com.banklab.fdservice.dto.AccountStatus;
  * Penalty model, per the lab manual's applyPenalty(): a percentage of the interest
  * earned up to the withdrawal date ({@code fd.premature-withdrawal.penalty-pct},
  * default 1%), plus an optional flat charge ({@code fd.premature-withdrawal.flat-fee},
- * default 0). The ERD §14 open item — G2's PRODUCT_FEE_MATRIX not modelling a rate
- * haircut — is still unresolved, so both knobs are configuration rather than
- * product-driven.
+ * default 0). Lifetime interest includes SIMPLE interest already paid out; its
+ * penalty can reduce principal. There is no minimum holding period. This retains
+ * the handoff's option A until Group 2 supplies an agreed product fee contract.
  */
 @Component
 public class PrematureWithdrawalPolicy {
@@ -65,7 +65,7 @@ public class PrematureWithdrawalPolicy {
      */
     public BigDecimal penalty(BigDecimal interestEarned, BigDecimal balance, int currencyDecimals) {
         BigDecimal onInterest = interestEarned.max(BigDecimal.ZERO).multiply(penaltyPct)
-                .divide(HUNDRED, currencyDecimals, RoundingMode.HALF_UP);
+                .divide(HUNDRED);
         BigDecimal total = onInterest.add(flatFee).setScale(currencyDecimals, RoundingMode.HALF_UP);
         return total.min(balance.setScale(currencyDecimals, RoundingMode.HALF_UP));
     }

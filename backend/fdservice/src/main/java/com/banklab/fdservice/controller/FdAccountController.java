@@ -23,6 +23,7 @@ import com.banklab.fdservice.dto.InterestPreviewResponse;
 import com.banklab.fdservice.dto.PageResponse;
 import com.banklab.fdservice.dto.PrematureWithdrawalRequest;
 import com.banklab.fdservice.dto.PrematureWithdrawalResponse;
+import com.banklab.fdservice.dto.WithdrawalQuoteResponse;
 import com.banklab.fdservice.service.FdAccountQueryService;
 import com.banklab.fdservice.service.FdAccountService;
 import com.banklab.fdservice.service.PrematureWithdrawalService;
@@ -77,6 +78,11 @@ public class FdAccountController {
     public InterestPreviewResponse calculateInterestPreview(@PathVariable UUID accountId,
             @Valid @RequestBody InterestPreviewRequest request) {
         return queryService.previewInterest(accountId, request);
+    }
+
+    @PostMapping("/{accountId}/withdrawal-quote")
+    public WithdrawalQuoteResponse quoteEarlyWithdrawal(@PathVariable UUID accountId) {
+        return withdrawalService.quote(accountId);
     }
 
     @PostMapping("/{accountId}/withdraw")

@@ -120,15 +120,29 @@ public class FdLedgerService {
     @Transactional
     public FdTransaction postPenalty(FdAccount account, BigDecimal amount, LocalDate businessDate, UUID txnGroupId,
             String userId) {
+        return postPenalty(account, amount, businessDate, txnGroupId, userId, null);
+    }
+
+    @Transactional
+    public FdTransaction postPenalty(FdAccount account, BigDecimal amount, LocalDate businessDate, UUID txnGroupId,
+            String userId, String remarks) {
         return postDebit(account, FdTxnType.PENALTY, amount, businessDate, txnGroupId,
-                "Premature withdrawal penalty", glAccounts.penaltyIncomeCd(), userId);
+                remarks == null || remarks.isBlank() ? "Premature withdrawal penalty" : remarks,
+                glAccounts.penaltyIncomeCd(), userId);
     }
 
     @Transactional
     public FdTransaction postWithdrawal(FdAccount account, BigDecimal amount, LocalDate businessDate,
             UUID txnGroupId, String userId) {
+        return postWithdrawal(account, amount, businessDate, txnGroupId, userId, null);
+    }
+
+    @Transactional
+    public FdTransaction postWithdrawal(FdAccount account, BigDecimal amount, LocalDate businessDate,
+            UUID txnGroupId, String userId, String remarks) {
         return postDebit(account, FdTxnType.WITHDRAWAL, amount, businessDate, txnGroupId,
-                "Premature withdrawal - account closed", glAccounts.settlementCd(), userId);
+                remarks == null || remarks.isBlank() ? "Premature withdrawal - account closed" : remarks,
+                glAccounts.settlementCd(), userId);
     }
 
     @Transactional

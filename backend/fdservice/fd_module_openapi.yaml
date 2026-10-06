@@ -272,23 +272,69 @@ paths:
         '422':
           description: Account's snapshotted terms can't be calculated (INVALID_INTEREST_TERMS)
 
+  /fd-accounts/{accountId}/withdrawal-quote:
+    post:
+      tags: [Accounts]
+      summary: Preview full premature closure without changing account or ledger
+      description: >
+        Uses the current business date, snapshotted account terms, existing interest
+        postings and the same calculation as withdraw. No accrual, ledger, audit or
+        status writes. The withdrawal day earns no interest. Returns the same
+        eligibility errors as withdraw. A quote is not a reservation; submit it as
+        expectedQuote to withdraw so changes require another confirmation.
+        Owner/BANK_OFFICER authorization awaits Group 1 JWT integration.
+      security: []
+      operationId: quoteEarlyWithdrawal
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Withdrawal quote on the current business date
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WithdrawalQuote' }
+        '400':
+          description: VALIDATION_ERROR (malformed account identifier)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: ACCOUNT_NOT_ACTIVE, WITHDRAWAL_BEFORE_VALUE_DATE, ACCOUNT_MATURED, or ACCRUAL_AHEAD_OF_BUSINESS_DATE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: INVALID_INTEREST_TERMS (invalid snapshotted account terms)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /fd-accounts/{accountId}/withdraw:
     post:
       tags: [Accounts]
       summary: Validate and process early withdrawal (Action 12)
       description: >
-        Distinct from the generic transaction endpoint because it carries
-        withdrawal-specific validation (elapsed tenure, penalty rule) and
-        writes two linked rows (WITHDRAWAL + penalty-adjusted INTEREST) plus
-        an account status update, atomically. NOTE — open item: G2's
-        PRODUCT_FEE_MATRIX models flat/percent fees; standard FD penalties
-        are usually a rate haircut. This endpoint's penalty calculation is
-        unresolved pending clarification from Group 2 (see justification doc).
-        IMPLEMENTED AS — full closure only, on the current business date:
-        interest accrued since the last boundary is credited, a penalty of
-        fd.premature-withdrawal.penalty-pct % of all interest earned (+ optional
-        flat fee) is debited, the remainder is paid out, and the account becomes
-        CLOSED. INTEREST, PENALTY and WITHDRAWAL rows share one FDT_TXN_GRP_ID.
+        Full closure only, on the current business date, under an account row lock
+        and one transaction. Retains handoff option A: penalty = min(balance after
+        final interest, round(lifetime interest earned * penalty-pct / 100 + flat-fee)).
+        Config keys fd.premature-withdrawal.penalty-pct (default 1.00) and
+        fd.premature-withdrawal.flat-fee (default 0.00). Includes SIMPLE interest
+        previously paid out in the penalty base; this can reduce principal.
+        No minimum holding period. Currency decimals and HALF_UP rounding once on
+        the combined fee. Same-day interest is zero; only the flat fee applies.
+        Catch-up accrual uses booked terms and excludes the withdrawal day.
+        Final INTEREST, PENALTY and WITHDRAWAL share one FDT_TXN_GRP_ID;
+        catch-up boundary postings retain their own groups. All writes roll back
+        together on failure. Status becomes CLOSED; balances become zero.
+        Remarks are saved on WITHDRAWAL, or PENALTY when the fee consumes the full
+        balance (no zero-amount ledger row). Payout uses existing FD_SETTLEMENT.
+        A supplied expectedQuote must still match under the lock or closure is
+        rejected with WITHDRAWAL_QUOTE_CHANGED. Existing clients may omit it.
+        Group 2 pricing confirmation, Group 1 authorization and the maturity
+        team's PREMATURE_CLOSURE notification writer remain integration dependencies.
+      security: []
       operationId: processEarlyWithdrawal
       parameters:
         - $ref: '#/components/parameters/AccountId'
@@ -302,8 +348,12 @@ paths:
                 amount:
                   type: number
                   format: double
-                  description: Optional; if given it must equal the full balance
-                remarks: { type: string }
+                  minimum: 0
+                  exclusiveMinimum: true
+                  description: Optional legacy field; must equal the stored principalBal before catch-up, not the quoted payout. Omit for quote-confirm flow.
+                remarks: { type: string, maxLength: 255 }
+                expectedQuote:
+                  $ref: '#/components/schemas/WithdrawalQuote'
       responses:
         '200':
           description: Withdrawal processed
@@ -311,14 +361,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PrematureWithdrawalResult'
+        '400':
+          description: VALIDATION_ERROR (malformed identifier/body, nonpositive amount, incomplete expectedQuote or remarks over 255 characters)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '409':
           description: >
             ACCOUNT_NOT_ACTIVE, WITHDRAWAL_BEFORE_VALUE_DATE, ACCOUNT_MATURED
             (on/after maturity it's maturity processing),
             ACCRUAL_AHEAD_OF_BUSINESS_DATE (interest already accrued past the
-            business date), or PARTIAL_WITHDRAWAL_NOT_SUPPORTED
+            business date), PARTIAL_WITHDRAWAL_NOT_SUPPORTED, or WITHDRAWAL_QUOTE_CHANGED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: INVALID_INTEREST_TERMS
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: GL_ACCOUNT_NOT_CONFIGURED; the entire closure is rolled back
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /fd-accounts/{accountId}/renew:
     post:
@@ -770,6 +838,22 @@ components:
         matAmt: { type: number, format: double }
         issuedTs: { type: string, format: date-time }
 
+    WithdrawalQuote:
+      type: object
+      required: [withdrawalDate, interestEarned, finalInterest, penaltyApplied, withdrawalAmount]
+      properties:
+        withdrawalDate: { type: string, format: date }
+        interestEarned: { type: number, minimum: 0, description: Lifetime interest including capitalizations and SIMPLE interest already paid out }
+        finalInterest: { type: number, minimum: 0, description: Interest since the last boundary credited at closure }
+        penaltyApplied: { type: number, minimum: 0 }
+        withdrawalAmount: { type: number, minimum: 0, description: Net payment at closure, excluding interest already paid out }
+      example:
+        withdrawalDate: '2026-07-16'
+        interestEarned: 3525.06
+        finalInterest: 275.80
+        penaltyApplied: 35.25
+        withdrawalAmount: 103489.81
+
     PrematureWithdrawalResult:
       type: object
       properties:
@@ -781,6 +865,11 @@ components:
         penaltyApplied: { type: number, format: double }
         withdrawalAmount: { type: number, format: double }
         account: { $ref: '#/components/schemas/FdAccount' }
+        txnGrpId: { type: string, format: uuid, description: Closure event reference }
+        transactionIds:
+          type: array
+          description: Final interest, penalty and withdrawal row IDs in the closure group (only positive postings)
+          items: { type: integer, format: int64 }
 
     BusinessClock:
       type: object

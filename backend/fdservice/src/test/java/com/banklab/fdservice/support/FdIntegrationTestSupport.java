@@ -169,11 +169,36 @@ public abstract class FdIntegrationTestSupport {
 
         BigDecimal accruedOnActiveAccounts = accountRepository.findAll().stream()
                 .filter(account -> "ACTIVE".equals(account.getSts()) && account.getAccruedIntAmt() != null)
-                .map(account -> account.getAccruedIntAmt().setScale(2, java.math.RoundingMode.HALF_UP))
+                .map(account -> account.getAccruedIntAmt().setScale(
+                        account.getCcyDecimals() == null ? 2 : account.getCcyDecimals(), java.math.RoundingMode.HALF_UP))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(glBalances().get("FD_INT_PAYABLE"))
                 .as("FD_INT_PAYABLE == rounded accrued interest of ACTIVE accounts")
                 .isEqualByComparingTo(accruedOnActiveAccounts);
+
+        accountRepository.findAll().stream()
+                .filter(account -> "CLOSED".equals(account.getSts()) || "MATURED_CLOSED".equals(account.getSts()))
+                .forEach(account -> {
+                    assertThat(account.getPrincipalBal()).isZero();
+                    assertThat(account.getAccruedIntAmt()).isZero();
+                    BigDecimal balance = BigDecimal.ZERO;
+                    BigDecimal depositNet = BigDecimal.ZERO;
+                    for (FdTransaction txn : transactions(account.getFdaId())) {
+                        assertThat(txn.getBalBefore()).isEqualByComparingTo(balance);
+                        BigDecimal externalInterest = "INTEREST".equals(txn.getTxnTyp())
+                                ? legsByTxn.get(txn.getFdtId()).stream()
+                                        .filter(leg -> "C".equals(leg.getDrCr()) && "FD_SETTLEMENT".equals(leg.getGlCd()))
+                                        .map(FdGlEntry::getAmt).reduce(BigDecimal.ZERO, BigDecimal::add)
+                                : BigDecimal.ZERO;
+                        BigDecimal movement = ("C".equals(txn.getDrCr()) ? txn.getAmt() : txn.getAmt().negate())
+                                .subtract(externalInterest);
+                        assertThat(txn.getBalAfter()).isEqualByComparingTo(balance.add(movement));
+                        balance = txn.getBalAfter();
+                        depositNet = depositNet.add(movement);
+                    }
+                    assertThat(balance).isZero();
+                    assertThat(depositNet).as("deposit credits less debits, excluding external interest payouts").isZero();
+                });
     }
 
     protected static String accountJson(String principal, int tenureMonths, String rateId, String interestType,

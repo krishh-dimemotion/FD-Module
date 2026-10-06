@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Withdraw Fixed Deposit</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main class="page">
+    <nav class="topnav" aria-label="Main navigation">
+      <a href="index.html">Open account</a>
+      <a href="withdraw.html" aria-current="page">Withdraw FD</a>
+      <a href="operations.html">Operations</a>
+    </nav>
+    <h1>Withdraw your fixed deposit</h1>
+    <p class="subtitle">Review the interest, penalty and payment before closing your FD.</p>
+    <div id="withdraw-error" class="errors" role="alert" hidden></div>
+    <form id="withdraw-lookup" class="panel">
+      <label for="account-number">Account number</label>
+      <input id="account-number" type="text" maxlength="20" required autocomplete="off" />
+      <button id="lookup-button" type="submit" class="secondary">Find account</button>
+    </form>
+    <section id="withdraw-account" class="panel" aria-labelledby="account-heading" hidden>
+      <div class="panel-head"><h2 id="account-heading">Your FD</h2></div>
+      <dl id="account-summary" class="kv"></dl>
+      <p id="eligibility-message" class="hint"></p>
+      <form id="quote-form">
+        <label for="withdraw-reason">Reason for closing (optional)</label>
+        <input id="withdraw-reason" type="text" maxlength="255" />
+        <button id="quote-button" type="submit" class="secondary">Review withdrawal</button>
+      </form>
+    </section>
+    <section id="quote-section" class="panel" aria-labelledby="quote-heading" hidden>
+      <div class="panel-head"><h2 id="quote-heading" tabindex="-1">Review your withdrawal</h2></div>
+      <dl id="quote-summary" class="kv"></dl>
+      <p class="hint">Interest earned includes interest paid previously. Previously paid interest is not paid again. The penalty may reduce your principal.</p>
+      <p id="quoted-reason"></p>
+      <form id="confirm-form">
+        <label><input id="acknowledge" type="checkbox" required /> I understand this closes the FD and cannot be undone.</label>
+        <button id="confirm-button" type="submit" class="danger" disabled>Confirm and close FD</button>
+        <button id="cancel-button" type="button" class="secondary">Cancel</button>
+      </form>
+    </section>
+    <section id="receipt-section" class="result success" role="status" aria-labelledby="receipt-heading" hidden>
+      <h2 id="receipt-heading" tabindex="-1">Your FD is closed</h2>
+      <dl id="receipt-summary" class="kv"></dl>
+    </section>
+  </main>
+  <script src="js/api.js"></script>
+  <script src="js/withdraw.js"></script>
+</body>
+</html>

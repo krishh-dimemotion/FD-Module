@@ -15,6 +15,7 @@ public class AccountNotWithdrawableException extends RuntimeException {
     public static final String ACCOUNT_MATURED = "ACCOUNT_MATURED";
     public static final String PARTIAL_NOT_SUPPORTED = "PARTIAL_WITHDRAWAL_NOT_SUPPORTED";
     public static final String ACCRUAL_AHEAD_OF_BUSINESS_DATE = "ACCRUAL_AHEAD_OF_BUSINESS_DATE";
+    public static final String QUOTE_CHANGED = "WITHDRAWAL_QUOTE_CHANGED";
 
     private final String code;
 

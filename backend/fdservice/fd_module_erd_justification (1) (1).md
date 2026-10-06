@@ -107,7 +107,7 @@ built in memory and persisted in one atomic block.
 | `FDA_MAT_AMT` | `DECIMAL(18,2)` | Maturity value quoted at booking |
 | `FDA_MAT_INSTRUCTION` | `VARCHAR(30)` | Payout-or-renew instruction — kept on the account since a customer can change their own standing instruction |
 | `FDA_LAST_ACCRUAL_DT` / `FDA_LAST_CAPTLZ_DT` | `DATE` | Idempotency guards — stop a rerun of the EOD batch from double-accruing interest |
-| `FDA_STS` | `VARCHAR(20)` | Lifecycle state — PENDING / ACTIVE / MATURED_CLOSED / MATURED_RENEWED / CLOSED_PREMATURE |
+| `FDA_STS` | `VARCHAR(20)` | Lifecycle state — PENDING / ACTIVE / MATURED_CLOSED / MATURED_RENEWED / CLOSED (premature closure; matches code and API) |
 | `FDA_CLOSURE_DT` | `DATE` | Actual closure date, distinct from `FDA_MAT_DT` (premature closure ends the account early) |
 | `FDA_RENEWED_FROM_ID` | `UNIQUEIDENTIFIER` | Self-FK. Renewal creates a **new row**, chained back to the old one — the old contract's terms and history stay intact rather than being overwritten |
 | `FDA_CUST_NAME_SNAP` | `VARCHAR(255)` | Report display only (P6) |
@@ -280,9 +280,39 @@ batch processing and account "time travel" don't depend on the system clock.
 **Rate selection needs a customer→category mapping (G1).** G2 prices by
 `category_code`; nothing in G1's schema currently maps a customer to one.
 
-**Premature-withdrawal penalty model unclear (G2).** `PRODUCT_FEE_MATRIX` models a flat
-fee or percent-of-principal; standard FD penalties are usually a rate haircut instead.
-Needs clarification before Action 12 can be implemented precisely.
+**Premature withdrawal: handoff option A retained pending G2 integration.**
+`penalty = min(available balance, round(lifetime interest × penalty-pct / 100 + flat-fee))`.
+Defaults: `fd.premature-withdrawal.penalty-pct=1.00` and
+`fd.premature-withdrawal.flat-fee=0.00`. Round once, HALF_UP, to currency decimals.
+Lifetime interest includes SIMPLE payouts already received, so the penalty may reduce
+principal. No minimum holding period is imposed. Interest covers `[value date, withdrawal
+date)`; same-day closure earns zero interest and attracts only any configured flat fee.
+This preserves the team's current rule; it does not claim a new agreement from Group 2.
+
+The read-only withdrawal quote and locked execution use the existing InterestCalculator
+and ledger. `expectedQuote` protects the customer's confirmation against a changed date
+or amounts. Closure uses `CLOSED`, preserving existing API/report filters. The optional
+reason is stored in `FDT_REMARKS` on WITHDRAWAL (PENALTY if the fee consumes the full balance).
+No new table, column, savings account or notification subsystem is introduced.
+
+Worked examples (100,000 principal, 6.5%, ACT/ACT, 1% penalty, no flat fee):
+
+| Terms / dates | Lifetime interest | Final interest | Penalty | Closure payout |
+|---|---:|---:|---:|---:|
+| COMPOUND quarterly, 1 Jan–16 Jul 2026 | 3,525.06 | 275.80 | 35.25 | 103,489.81 |
+| SIMPLE monthly, 1 Jan–1 Feb 2026; 552.05 paid separately | 552.05 | 0.00 | 5.52 | 99,994.48 |
+| Same-day, 1 Jan 2026 | 0.00 | 0.00 | 0.00 | 100,000.00 |
+
+These exact cases are asserted in `PrematureWithdrawalQuoteIntegrationTest`.
+`sql/reconcile_closure.sql` checks balance continuity, zero closed balances and GL legs.
+Because existing SIMPLE payout INTEREST credits leave the deposit balance unchanged,
+their separately settled amount is subtracted from raw credits-minus-debits to obtain
+the deposit's zero net. The query reports both values instead of treating an external
+payout as retained principal. Integration tests also verify detection of a corrupted row.
+
+Group 1's owner/BANK_OFFICER claims and the maturity team's PREMATURE_CLOSURE notification
+writer remain unavailable. Hook points are documented in the withdrawal service; no
+unverified savings-transfer contract is assumed.
 
 **Day-count convention not published by G2.** `FDA_DAY_COUNT_CONV` defaults to `ACT/ACT`
 for new accounts (days falling in a leap year earn 1/366 of the annual rate, other days
