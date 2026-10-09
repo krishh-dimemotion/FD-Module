@@ -23,9 +23,11 @@ import com.banklab.fdservice.dto.InterestPreviewResponse;
 import com.banklab.fdservice.dto.PageResponse;
 import com.banklab.fdservice.dto.PrematureWithdrawalRequest;
 import com.banklab.fdservice.dto.PrematureWithdrawalResponse;
+import com.banklab.fdservice.dto.RenewFdAccountRequest;
 import com.banklab.fdservice.dto.WithdrawalQuoteResponse;
 import com.banklab.fdservice.service.FdAccountQueryService;
 import com.banklab.fdservice.service.FdAccountService;
+import com.banklab.fdservice.service.MaturityRenewalService;
 import com.banklab.fdservice.service.PrematureWithdrawalService;
 
 import jakarta.validation.Valid;
@@ -39,6 +41,7 @@ public class FdAccountController {
     private final FdAccountService fdAccountService;
     private final FdAccountQueryService queryService;
     private final PrematureWithdrawalService withdrawalService;
+    private final MaturityRenewalService maturityRenewalService;
 
     @PostMapping
     public ResponseEntity<com.banklab.fdservice.dto.FdAccount> createAccount(
@@ -89,5 +92,11 @@ public class FdAccountController {
     public PrematureWithdrawalResponse processEarlyWithdrawal(@PathVariable UUID accountId,
             @Valid @RequestBody(required = false) PrematureWithdrawalRequest request) {
         return withdrawalService.withdraw(accountId, request);
+    }
+
+    @PostMapping("/{accountId}/renew")
+    public ResponseEntity<com.banklab.fdservice.dto.FdAccount> renewAtMaturity(@PathVariable UUID accountId,
+            @Valid @RequestBody(required = false) RenewFdAccountRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(maturityRenewalService.renew(accountId, request));
     }
 }

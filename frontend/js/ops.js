@@ -5,6 +5,7 @@ const byId = (id) => document.getElementById(id);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 let currentAccountId = null;
+let currentBusinessDate = null;
 
 function formatMoney(value) {
   if (value === null || value === undefined) return '—';
@@ -105,6 +106,7 @@ function badge(status) {
 
 async function loadClock() {
   const clock = await apiRequest('GET', '/business-clock');
+  currentBusinessDate = clock.businessDate;
   renderKeyValues(byId('clock-view'), [
     ['Business date', clock.businessDate],
     ['Previous date', clock.previousBusinessDate],
@@ -227,9 +229,13 @@ async function loadAccount(fdaId) {
   if (!byId('preview-start').value) byId('preview-start').value = account.lastCaptlzDt || account.valueDt;
   if (!byId('preview-end').value) byId('preview-end').value = account.matDt;
 
-  byId('withdraw-block').hidden = account.status !== 'ACTIVE';
+  const isAtOrPastMaturity = currentBusinessDate && currentBusinessDate >= account.matDt;
+  byId('withdraw-block').hidden = account.status !== 'ACTIVE' || isAtOrPastMaturity;
   byId('withdraw-confirm').hidden = true;
   byId('withdraw-btn').hidden = false;
+  byId('renew-block').hidden = account.status !== 'ACTIVE' || !isAtOrPastMaturity;
+  byId('renew-confirm').hidden = true;
+  byId('renew-btn').hidden = false;
 }
 
 byId('lookup-form').addEventListener('submit', (event) => {
@@ -239,6 +245,7 @@ byId('lookup-form').addEventListener('submit', (event) => {
     if (!key) throw new Error('Enter an account number or FDA_ID.');
     byId('preview-view').hidden = true;
     byId('withdraw-result').hidden = true;
+    byId('renew-result').hidden = true;
     byId('preview-start').value = '';
     byId('preview-end').value = '';
     await loadAccount(await resolveAccountId(key));
@@ -289,6 +296,37 @@ byId('withdraw-confirm-btn').addEventListener('click', (event) =>
       ['Penalty applied', formatMoney(result.penaltyApplied)],
       ['Paid out', formatMoney(result.withdrawalAmount)],
     ]);
+    await refreshAll();
+  })
+);
+
+byId('renew-btn').addEventListener('click', () => {
+  const tenure = byId('renew-tenure').value;
+  byId('renew-confirm-text').textContent = tenure
+    ? `Renew this deposit for ${tenure} month(s)?`
+    : 'Renew this deposit using its current tenure?';
+  byId('renew-confirm').hidden = false;
+  byId('renew-btn').hidden = true;
+});
+
+byId('renew-cancel-btn').addEventListener('click', () => {
+  byId('renew-confirm').hidden = true;
+  byId('renew-btn').hidden = false;
+});
+
+byId('renew-confirm-btn').addEventListener('click', (event) =>
+  withBusyButton(event.currentTarget, async () => {
+    const tenure = byId('renew-tenure').value;
+    const result = await apiRequest('POST', `/fd-accounts/${currentAccountId}/renew`,
+      tenure ? { tenureMonths: Number(tenure) } : {});
+    const list = byId('renew-result');
+    list.hidden = false;
+    renderKeyValues(list, [
+      ['New account number', result.acctNum],
+      ['Renewed balance', formatMoney(result.principalBal)],
+      ['New maturity date', result.matDt],
+    ]);
+    currentAccountId = result.fdaId;
     await refreshAll();
   })
 );

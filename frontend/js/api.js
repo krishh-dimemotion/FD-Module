@@ -1,6 +1,6 @@
 // Backend is a separate app (dev/backend/fdservice) on its own origin — every
 // call here goes over CORS with a full URL, never a relative path.
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8081';
 
 /**
  * Calls the backend and resolves with the parsed JSON body on 2xx.

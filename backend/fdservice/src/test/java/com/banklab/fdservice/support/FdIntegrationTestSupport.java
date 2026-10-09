@@ -177,7 +177,8 @@ public abstract class FdIntegrationTestSupport {
                 .isEqualByComparingTo(accruedOnActiveAccounts);
 
         accountRepository.findAll().stream()
-                .filter(account -> "CLOSED".equals(account.getSts()) || "MATURED_CLOSED".equals(account.getSts()))
+                .filter(account -> "CLOSED".equals(account.getSts()) || "MATURED_CLOSED".equals(account.getSts())
+                        || "MATURED_RENEWED".equals(account.getSts()))
                 .forEach(account -> {
                     assertThat(account.getPrincipalBal()).isZero();
                     assertThat(account.getAccruedIntAmt()).isZero();

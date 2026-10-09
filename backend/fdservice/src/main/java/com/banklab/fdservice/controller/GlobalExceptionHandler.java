@@ -15,6 +15,7 @@ import com.banklab.fdservice.batch.BusinessDateAfterClockException;
 import com.banklab.fdservice.client.UpstreamServiceException;
 import com.banklab.fdservice.dto.ErrorResponse;
 import com.banklab.fdservice.service.AccountNotWithdrawableException;
+import com.banklab.fdservice.service.AccountNotRenewableException;
 import com.banklab.fdservice.service.AccountSequenceNotConfiguredException;
 import com.banklab.fdservice.service.CategoryMappingUnresolvedException;
 import com.banklab.fdservice.service.FdAccountNotFoundException;
@@ -101,6 +102,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountNotWithdrawableException.class)
     public ResponseEntity<ErrorResponse> handleNotWithdrawable(AccountNotWithdrawableException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(AccountNotRenewableException.class)
+    public ResponseEntity<ErrorResponse> handleNotRenewable(AccountNotRenewableException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ErrorResponse(ex.getCode(), ex.getMessage()));
     }

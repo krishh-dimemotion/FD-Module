@@ -113,6 +113,21 @@
           </div>
         </div>
         <dl class="kv" id="withdraw-result" hidden></dl>
+
+        <div id="renew-block" hidden>
+          <h3>Renew at maturity</h3>
+          <p class="hint">Opens a new linked FD using the matured balance. The current account is retained as its audit history.</p>
+          <label>New tenure (months, optional)
+            <input type="number" id="renew-tenure" min="1" step="1" inputmode="numeric" />
+          </label>
+          <button type="button" id="renew-btn" class="primary">Renew deposit</button>
+          <div id="renew-confirm" class="confirm" hidden>
+            <span id="renew-confirm-text"></span>
+            <button type="button" id="renew-confirm-btn" class="primary">Confirm renewal</button>
+            <button type="button" id="renew-cancel-btn" class="secondary">Cancel</button>
+          </div>
+        </div>
+        <dl class="kv" id="renew-result" hidden></dl>
       </div>
     </section>
 

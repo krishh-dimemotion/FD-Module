@@ -152,6 +152,27 @@ public class FdLedgerService {
                 "Maturity payout on " + businessDate, glAccounts.settlementCd(), userId);
     }
 
+    /** Moves the matured balance out of its historical FD before a linked renewal. */
+    @Transactional
+    public FdTransaction postRenewalTransferOut(FdAccount account, BigDecimal amount, LocalDate businessDate,
+            UUID txnGroupId, String userId) {
+        return postDebit(account, FdTxnType.RENEWAL_TRANSFER, amount, businessDate, txnGroupId,
+                "Maturity renewal transfer out on " + businessDate, glAccounts.settlementCd(), userId);
+    }
+
+    /** Receives the matured balance into the newly opened, linked FD. */
+    @Transactional
+    public FdTransaction postRenewalTransferIn(FdAccount account, BigDecimal amount, LocalDate businessDate,
+            UUID txnGroupId, String userId) {
+        BigDecimal before = account.getPrincipalBal();
+        BigDecimal after = before.add(amount);
+        FdTransaction txn = post(new Posting(account, FdTxnType.RENEWAL_TRANSFER, CREDIT, amount, before, after,
+                businessDate, businessDate, txnGroupId, "Maturity renewal transfer in on " + businessDate,
+                glAccounts.settlementCd(), glAccounts.depositLiabilityCd(), userId));
+        account.setPrincipalBal(after);
+        return txn;
+    }
+
     private FdTransaction postDebit(FdAccount account, FdTxnType type, BigDecimal amount, LocalDate businessDate,
             UUID txnGroupId, String remarks, String creditGlCd, String userId) {
         BigDecimal before = account.getPrincipalBal();
