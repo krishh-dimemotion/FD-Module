@@ -10,6 +10,7 @@ public record GlAccountView(
         String name,
         String type,
         String currencyCode,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal currentBalance,
         Boolean active) {
 }

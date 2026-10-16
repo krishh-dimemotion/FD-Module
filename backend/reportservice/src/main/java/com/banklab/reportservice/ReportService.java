@@ -55,13 +55,15 @@ public class ReportService {
                 totals.addAll(accountTotals(rows));
             }
             case TDS_COMPLIANCE -> {
+                warnings.add("Demo tax summary: recorded withholding only; not a statutory tax certificate. Financial year uses settlement value date for engine deductions.");
                 Map<String,Account> byId=index(accounts);
                 for (Txn t:store.transactions(customer,accountId)) if ("TDS".equals(t.type()) && inside(t.date(),from,to)) {
                     Account a=byId.get(t.accountId());
-                    if (t.pan()==null || t.taxRate()==null) warnings.add("Missing PAN or tax-rate snapshot on TDS transaction " + t.id());
-                    int fy=t.date().getMonthValue()<4 ? t.date().getYear()-1 : t.date().getYear();
+                    if (t.policyVersion()==null && (t.pan()==null || t.taxRate()==null)) warnings.add("Missing PAN or tax-rate snapshot on TDS transaction " + t.id());
+                    int fy=t.fiscalYear()!=null?t.fiscalYear():(t.date().getMonthValue()<4 ? t.date().getYear()-1 : t.date().getYear());
                     rows.add(row("transactionId",t.id(),"accountId",a.id(),"accountNumber",a.number(),"customerId",a.customerId(),
                         "customerName",a.customerName(),"currency",a.currency(),"date",t.date(),"financialYear",fy+"-"+(fy+1),
+                        "policyVersion",t.policyVersion(),"taxableAmount",t.taxableAmount()==null?null:money(t.taxableAmount(),a.decimals()),
                         "pan",t.pan(),"taxRate",t.taxRate()==null?null:t.taxRate().toPlainString(),
                         "netDeduction",money("D".equals(t.direction())?t.amount():t.amount().negate(),a.decimals())));
                 }
@@ -143,13 +145,14 @@ public class ReportService {
     }
     private static Map<String,Object> accountRow(Account a,Set<String> warnings) {
         if (a.customerName()==null || a.productName()==null) warnings.add("Missing display snapshot on account " + a.number());
+        if(a.taxEnabled()) warnings.add("Tax-enabled maturity amounts are net estimates; other account activity can change annual allowance availability.");
         if (a.balance()==null || a.accrued()==null) throw new ApiException(422,"INCOMPLETE_ACCOUNT_BALANCE","Missing current balance on account " + a.number());
         BigDecimal accrued=a.accrued().setScale(a.decimals(),RoundingMode.HALF_UP);
         return row("accountId",a.id(),"accountNumber",a.number(),"customerId",a.customerId(),"customerName",a.customerName(),
             "productCode",a.productCode(),"productName",a.productName(),"currency",a.currency(),"status",a.status(),
             "openDate",a.opened(),"maturityDate",a.maturity(),"principal",money(a.principal(),a.decimals()),
             "depositBalance",money(a.balance(),a.decimals()),"accruedInterest",money(accrued,a.decimals()),
-            "totalLiability",money(a.balance().add(accrued),a.decimals()),"projectedMaturityAmount",a.maturityAmount()==null?null:money(a.maturityAmount(),a.decimals()));
+            "totalLiability",money(a.balance().add(accrued),a.decimals()),"taxEnabled",a.taxEnabled(),"projectedMaturityAmount",a.maturityAmount()==null?null:money(a.maturityAmount(),a.decimals()));
     }
     private static List<Map<String,Object>> accountTotals(List<Map<String,Object>> rows) {
         Map<String,Map<String,Object>> totals=new TreeMap<>();

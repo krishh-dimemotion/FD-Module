@@ -43,6 +43,13 @@ public class InterestPostingService {
     private final InterestCalculator calculator;
     private final FdLedgerService ledger;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.banklab.fdservice.tax.TaxService taxes;
+
+    private com.banklab.fdservice.tax.TaxService.Session taxSession(FdAccount account,LocalDate from,LocalDate to,boolean write) {
+        return taxes == null ? com.banklab.fdservice.tax.TaxService.Session.disabled() : taxes.session(account,from,to,write);
+    }
+
     @Value("${fd.interest.default-interest-type}")
     private InterestType defaultInterestType;
 
@@ -77,6 +84,7 @@ public class InterestPostingService {
             return false;
         }
 
+        prepareClosureTax(account,account.getMatDt());
         UUID closureGroup = UUID.randomUUID();
         if (hasContractedRate(account)) {
             bringAccrualTo(account, account.getMatDt(), businessDate, FdLedgerService.BATCH_USER);
@@ -107,7 +115,12 @@ public class InterestPostingService {
      */
     public boolean bringAccrualTo(FdAccount account, LocalDate through, LocalDate businessDate, String userId) {
         InterestTerms terms = termsOf(account);
-        AccrualPlan plan = calculator.planAccrual(AccountInterestState.from(account), terms, through);
+        AccrualPlan initial = calculator.planAccrual(AccountInterestState.from(account), terms, through);
+        if(initial.noOp()) return false;
+        var taxableEvents=initial.events().stream().filter(e->e.amount().signum()>0).toList();
+        var tax = taxableEvents.isEmpty() ? com.banklab.fdservice.tax.TaxService.Session.disabled()
+                : taxSession(account,taxableEvents.getFirst().boundaryDate(),taxableEvents.getLast().boundaryDate(),true);
+        AccrualPlan plan = calculator.planAccrual(AccountInterestState.from(account), terms, through,tax::assess);
         if (plan.noOp()) {
             return false;
         }
@@ -124,12 +137,14 @@ public class InterestPostingService {
                 continue;
             }
             UUID group = UUID.randomUUID();
-            switch (event.type()) {
+            var source = switch (event.type()) {
                 case CAPITALIZATION -> ledger.postInterestCapitalization(account, event.amount(),
                         event.boundaryDate(), businessDate, group, userId);
                 case PAYOUT -> ledger.postInterestPayout(account, event.amount(), event.boundaryDate(),
                         businessDate, group, userId);
-            }
+            };
+            postAssessment(account,tax,source,event.taxAmount(),event.boundaryDate(),businessDate,group,userId,
+                    event.type()==InterestEventType.CAPITALIZATION);
         }
         recogniseAccrual(account, terms.roundToCurrency(plan.accruedInterest()).subtract(recognised),
                 plan.accruedThrough(), businessDate, userId);
@@ -157,12 +172,60 @@ public class InterestPostingService {
         InterestTerms terms = termsOf(account);
         BigDecimal interest = terms.roundToCurrency(accruedOf(account));
         if (interest.signum() > 0) {
-            ledger.postInterestCapitalization(account, interest, valueDate, businessDate, txnGroupId, userId);
+            var tax = taxSession(account,valueDate,valueDate,true);
+            BigDecimal deduction = tax.assess(interest,valueDate);
+            var source = ledger.postInterestCapitalization(account, interest, valueDate, businessDate, txnGroupId, userId);
+            postAssessment(account,tax,source,deduction,valueDate,businessDate,txnGroupId,userId,true);
             account.setLastCaptlzDt(valueDate);
         }
         account.setAccruedIntAmt(BigDecimal.ZERO.setScale(InterestCalculator.ACCRUAL_SCALE));
         return interest;
     }
+
+    private void postAssessment(FdAccount account,com.banklab.fdservice.tax.TaxService.Session tax,
+            com.banklab.fdservice.entity.FdTransaction source,BigDecimal amount,LocalDate valueDate,
+            LocalDate businessDate,UUID group,String user,boolean capitalized) {
+        var decision=tax.next();
+        if(decision==null) return;
+        Long taxId=null;
+        if(amount.signum()>0) taxId=ledger.postTax(account,amount,decision.rate(),valueDate,businessDate,group,user,capitalized).getFdtId();
+        tax.record(decision,source.getFdtId(),taxId);
+    }
+
+    /** Acquire every year needed for closure before taking any GL locks. */
+    public void prepareClosureTax(FdAccount account,LocalDate through) {
+        if(!Boolean.TRUE.equals(account.getTaxEnabled()) || !hasContractedRate(account)) return;
+        InterestTerms terms=termsOf(account);
+        AccrualPlan plan=calculator.planAccrual(AccountInterestState.from(account),terms,through);
+        var dates=new java.util.ArrayList<LocalDate>();
+        plan.events().stream().filter(e->e.amount().signum()>0).forEach(e->dates.add(e.boundaryDate()));
+        BigDecimal accrued=plan.noOp()?accruedOf(account):plan.accruedInterest();
+        if(terms.roundToCurrency(accrued).signum()>0) dates.add(through);
+        if(!dates.isEmpty()) taxSession(account,dates.getFirst(),dates.getLast(),true);
+    }
+
+    /** Read-only simulation of catch-up boundaries and the final partial settlement. */
+    public ClosureProjection previewClosure(FdAccount account,LocalDate through) {
+        return previewClosure(account,through,false);
+    }
+    public ClosureProjection previewClosure(FdAccount account,LocalDate through,boolean locked) {
+        InterestTerms terms=termsOf(account);
+        AccrualPlan initial=calculator.planAccrual(AccountInterestState.from(account),terms,through);
+        var dates=new java.util.ArrayList<LocalDate>();
+        initial.events().stream().filter(e->e.amount().signum()>0).forEach(e->dates.add(e.boundaryDate()));
+        if(terms.roundToCurrency(initial.noOp()?accruedOf(account):initial.accruedInterest()).signum()>0) dates.add(through);
+        var tax=dates.isEmpty()?com.banklab.fdservice.tax.TaxService.Session.disabled():taxSession(account,dates.getFirst(),dates.getLast(),locked);
+        AccrualPlan plan=calculator.planAccrual(AccountInterestState.from(account),terms,through,tax::assess);
+        BigDecimal accrued=plan.noOp()?accruedOf(account):plan.accruedInterest();
+        BigDecimal interest=terms.roundToCurrency(accrued);
+        BigDecimal finalTax=interest.signum()>0?tax.assess(interest,through):BigDecimal.ZERO;
+        BigDecimal totalTax=finalTax;
+        for(var event:plan.events()) totalTax=totalTax.add(event.taxAmount());
+        return new ClosureProjection(plan,interest,finalTax,totalTax,
+            plan.closingPrincipalBalance().add(interest).subtract(finalTax));
+    }
+    public record ClosureProjection(AccrualPlan plan,BigDecimal finalInterest,BigDecimal finalTax,
+            BigDecimal totalTax,BigDecimal closingBalance) { }
 
     /** False for accounts booked without a rateId — they can't accrue, only be closed. */
     public boolean hasContractedRate(FdAccount account) {

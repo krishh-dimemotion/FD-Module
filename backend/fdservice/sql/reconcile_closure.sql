@@ -11,7 +11,9 @@ WITH transaction_legs AS (
            SUM(CASE WHEN g.fdge_amt = t.fdt_amt
                      AND g.fdge_txn_grp_id = t.fdt_txn_grp_id THEN 0 ELSE 1 END) AS bad_legs,
            SUM(CASE WHEN t.fdt_txn_typ = 'INTEREST' AND g.fdge_dr_cr = 'C'
-                     AND g.fdge_gl_cd = 'FD_SETTLEMENT' THEN g.fdge_amt ELSE 0 END) AS paid_out
+                     AND (g.fdge_gl_cd = 'FD_SETTLEMENT' OR g.fdge_gl_cd LIKE 'FD_SETTLEMENT\_%') THEN g.fdge_amt
+                    WHEN t.fdt_txn_typ = 'TDS' AND g.fdge_dr_cr = 'D'
+                     AND (g.fdge_gl_cd = 'FD_SETTLEMENT' OR g.fdge_gl_cd LIKE 'FD_SETTLEMENT\_%') THEN -g.fdge_amt ELSE 0 END) AS paid_out
     FROM fd_transactions t
     LEFT JOIN fd_gl_entries g ON g.fdge_fdt_id = t.fdt_id
     GROUP BY t.fdt_id

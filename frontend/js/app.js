@@ -61,10 +61,10 @@ function validate(formValues, roles) {
   if (!formValues.productCode) errors.push('Product Code is required.');
   if (!formValues.rateId) errors.push('Rate ID is required.');
 
-  const principal = Number(formValues.principal);
-  if (!formValues.principal || Number.isNaN(principal) || principal <= 0) {
-    errors.push('Principal Amount must be a positive number.');
-  }
+  try {
+    const error = Money.validate(formValues.principal, formValues.currencyCode || 'USD');
+    if (error) errors.push(error);
+  } catch (error) { errors.push(error.message); }
 
   const tenureMonths = Number(formValues.tenureMonths);
   if (!formValues.tenureMonths || !Number.isInteger(tenureMonths) || tenureMonths <= 0) {
@@ -117,7 +117,7 @@ function buildPayload(formValues, roles) {
   const payload = {
     custId: formValues.custId,
     productCode: formValues.productCode,
-    principal: Number(formValues.principal),
+    principal: formValues.principal,
     tenureMonths: Number(formValues.tenureMonths),
     rateId: formValues.rateId,
     initialRoles: roles.map((role) => ({
@@ -156,8 +156,9 @@ form.addEventListener('submit', async (event) => {
   submitBtn.textContent = 'Opening...';
   try {
     const account = await createFdAccount(payload);
-    showResult('success', 'Account opened', account);
+    showResult('success', 'Account opened', `${Money.exact(account.principalAmt, account.currencyCode)} deposited. Projected maturity: ${Money.exact(account.matAmt, account.currencyCode)}. ${account.taxEnabled ? 'Demo tax applies; projections may change with other account activity.' : 'Tax disabled for this contract.'}\n\n${JSON.stringify(account, null, 2)}`);
     form.reset();
+    updateCurrencyInput();
     rolesList.innerHTML = '';
     addRoleRow({ roleType: 'OWNER', isPrimary: true });
   } catch (error) {
@@ -167,3 +168,15 @@ form.addEventListener('submit', async (event) => {
     submitBtn.textContent = 'Open Account';
   }
 });
+
+function updateCurrencyInput() {
+  const input = document.getElementById('principal');
+  try {
+    const code = document.getElementById('currencyCode').value.trim().toUpperCase() || 'USD';
+    const decimals = Money.digits(code);
+    input.step = decimals ? '0.' + '0'.repeat(decimals - 1) + '1' : '1';
+    input.min = input.step;
+  } catch { input.step = 'any'; }
+}
+document.getElementById('currencyCode').addEventListener('input', updateCurrencyInput);
+updateCurrencyInput();

@@ -28,14 +28,14 @@ public class ReportStore {
                 rs.getString("FDA_CCY_CD"),decimals(rs.getObject("FDA_CCY_DECIMALS",Integer.class),rs.getString("FDA_CCY_CD")),rs.getString("FDA_STS"),
                 rs.getObject("FDA_OPEN_DT",LocalDate.class),rs.getObject("FDA_MAT_DT",LocalDate.class),
                 rs.getObject("FDA_CLOSURE_DT",LocalDate.class),rs.getBigDecimal("FDA_PRINCIPAL_AMT"),
-                rs.getBigDecimal("FDA_PRINCIPAL_BAL"),rs.getBigDecimal("FDA_ACCRUED_INT_AMT"),rs.getBigDecimal("FDA_MAT_AMT")));
+                rs.getBigDecimal("FDA_PRINCIPAL_BAL"),rs.getBigDecimal("FDA_ACCRUED_INT_AMT"),rs.getBigDecimal("FDA_MAT_AMT"),rs.getBoolean("FDA_TAX_ENABLED")));
     }
     public List<Txn> transactions(String custId, String accountId) {
-        return jdbc.query("SELECT t.* FROM FD_TRANSACTIONS t JOIN FD_ACCOUNTS a ON a.FDA_ID=t.FDA_ID " + FILTER + " ORDER BY t.FDT_TXN_DT,t.FDT_ID",
+        return jdbc.query("SELECT t.*,e.POLICY_VERSION,e.TAXABLE_AMOUNT,y.FY_START FROM FD_TRANSACTIONS t LEFT JOIN FD_TAX_EVENTS e ON e.TAX_FDT_ID=t.FDT_ID LEFT JOIN FD_TAX_YEARS y ON y.TAX_KEY=e.TAX_KEY JOIN FD_ACCOUNTS a ON a.FDA_ID=t.FDA_ID " + FILTER + " ORDER BY t.FDT_TXN_DT,t.FDT_ID",
             Map.of("custId",custId,"accountId",accountId), (rs,n) -> new Txn(rs.getLong("FDT_ID"),rs.getString("FDA_ID"),
                 rs.getString("FDT_TXN_TYP"),rs.getString("FDT_DR_CR"),rs.getBigDecimal("FDT_AMT"),
                 rs.getBigDecimal("FDT_BAL_BEFORE"),rs.getBigDecimal("FDT_BAL_AFTER"),rs.getObject("FDT_TXN_DT",LocalDate.class),
-                rs.getString("FDT_PAN_SNAP"),rs.getBigDecimal("FDT_TDS_RT"),rs.getString("FDT_REMARKS")));
+                rs.getString("FDT_PAN_SNAP"),rs.getBigDecimal("FDT_TDS_RT"),rs.getString("FDT_REMARKS"),rs.getString("POLICY_VERSION"),rs.getBigDecimal("TAXABLE_AMOUNT"),rs.getObject("FY_START",Integer.class)));
     }
     private static int decimals(Integer snapshot,String currency) {
         int digits=snapshot==null?java.util.Currency.getInstance(currency).getDefaultFractionDigits():snapshot;
@@ -44,9 +44,20 @@ public class ReportStore {
     }
     public record Account(String id,String number,String customerId,String customerName,String productCode,String productName,
         String currency,int decimals,String status,LocalDate opened,LocalDate maturity,LocalDate closed,
-        BigDecimal principal,BigDecimal balance,BigDecimal accrued,BigDecimal maturityAmount) { }
+        BigDecimal principal,BigDecimal balance,BigDecimal accrued,BigDecimal maturityAmount,boolean taxEnabled) {
+        public Account(String id,String number,String customerId,String customerName,String productCode,String productName,
+            String currency,int decimals,String status,LocalDate opened,LocalDate maturity,LocalDate closed,
+            BigDecimal principal,BigDecimal balance,BigDecimal accrued,BigDecimal maturityAmount) {
+            this(id,number,customerId,customerName,productCode,productName,currency,decimals,status,opened,maturity,closed,
+                principal,balance,accrued,maturityAmount,false);
+        }
+    }
     public record Txn(long id,String accountId,String type,String direction,BigDecimal amount,BigDecimal before,BigDecimal after,
-        LocalDate date,String pan,BigDecimal taxRate,String remarks) {
+        LocalDate date,String pan,BigDecimal taxRate,String remarks,String policyVersion,BigDecimal taxableAmount,Integer fiscalYear) {
+        public Txn(long id,String accountId,String type,String direction,BigDecimal amount,BigDecimal before,BigDecimal after,
+            LocalDate date,String pan,BigDecimal taxRate,String remarks) {
+            this(id,accountId,type,direction,amount,before,after,date,pan,taxRate,remarks,null,null,null);
+        }
         BigDecimal delta() {
             if (before==null || after==null) throw new ApiException(422,"INCOMPLETE_LEDGER_HISTORY","Missing balance snapshots on transaction " + id);
             return after.subtract(before);

@@ -10,8 +10,11 @@ public record FdAccountSummary(
         String fdaId,
         String acctNum,
         String status,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal principalBal,
         LocalDate matDt,
         String productCode,
-        String custNameSnap) {
+        String custNameSnap,
+        String currencyCode,
+        Integer ccyDecimals) {
 }

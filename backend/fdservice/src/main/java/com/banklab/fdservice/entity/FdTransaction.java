@@ -65,13 +65,13 @@ public class FdTransaction extends FdAuditableEntity {
     @Column(name = "FDT_DR_CR", length = 1, nullable = false)
     private String drCr;
 
-    @Column(name = "FDT_AMT", precision = 18, scale = 2, nullable = false)
+    @Column(name = "FDT_AMT", precision = 20, scale = 4, nullable = false)
     private BigDecimal amt;
 
-    @Column(name = "FDT_BAL_BEFORE", precision = 18, scale = 2)
+    @Column(name = "FDT_BAL_BEFORE", precision = 20, scale = 4)
     private BigDecimal balBefore;
 
-    @Column(name = "FDT_BAL_AFTER", precision = 18, scale = 2)
+    @Column(name = "FDT_BAL_AFTER", precision = 20, scale = 4)
     private BigDecimal balAfter;
 
     @Column(name = "FDT_CCY_CD", length = 3)
@@ -86,7 +86,7 @@ public class FdTransaction extends FdAuditableEntity {
     @Column(name = "FDT_TXN_TS")
     private LocalDateTime txnTs;
 
-    @Column(name = "FDT_TDS_RT", precision = 6, scale = 4)
+    @Column(name = "FDT_TDS_RT", precision = 9, scale = 4)
     private BigDecimal tdsRt;
 
     @Column(name = "FDT_PAN_SNAP", length = 10)

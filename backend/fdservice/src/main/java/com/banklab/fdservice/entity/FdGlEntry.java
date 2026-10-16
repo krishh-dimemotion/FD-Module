@@ -44,7 +44,7 @@ public class FdGlEntry extends FdAuditableEntity {
     @Column(name = "FDGE_ID")
     private Long fdgeId;
 
-    @Column(name = "FDGE_GL_CD", length = 20, nullable = false)
+    @Column(name = "FDGE_GL_CD", length = 64, nullable = false)
     private String glCd;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -67,7 +67,7 @@ public class FdGlEntry extends FdAuditableEntity {
     @Column(name = "FDGE_DR_CR", length = 1, nullable = false)
     private String drCr;
 
-    @Column(name = "FDGE_AMT", precision = 18, scale = 2, nullable = false)
+    @Column(name = "FDGE_AMT", precision = 20, scale = 4, nullable = false)
     private BigDecimal amt;
 
     @Column(name = "FDGE_POST_DT", nullable = false)

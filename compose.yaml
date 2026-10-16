@@ -32,6 +32,10 @@ services:
       SPRING_JPA_SHOW_SQL: 'false'
       FD_BUSINESS_CLOCK_SEED_DATE: '2026-01-01'
       FD_BATCH_SCHEDULER_ENABLED: 'false'
+      FD_TAX_ENABLED: ${FD_TAX_ENABLED:-true}
+      FD_TAX_RATE: ${FD_TAX_RATE:-10.0000}
+      FD_TAX_YEAR_START_MONTH: ${FD_TAX_YEAR_START_MONTH:-4}
+      FD_TAX_EXEMPT_CUSTOMERS: ${FD_TAX_EXEMPT_CUSTOMERS:-}
     healthcheck:
       test: [CMD-SHELL, 'curl -fsS http://localhost:8081/business-clock >/dev/null']
       interval: 5s

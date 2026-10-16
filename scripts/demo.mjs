@@ -54,6 +54,7 @@ for (const type of ['PORTFOLIO_SUMMARY','TOTAL_LIABILITY','MONTHLY_GROWTH','TDS_
     assert.equal(report.rows[1].newDeposits,'0.00');
     assert.equal(report.rows[1].renewalIn,report.rows[1].renewalOut);
   }
+  const pdf=await fetch(base+'/reports/fd-accounts?'+params+'&format=pdf'); assert.equal(pdf.status,200); assert(Buffer.from(await pdf.arrayBuffer()).subarray(0,5).equals(Buffer.from('%PDF-')));
   const csv=await fetch(base+'/reports/fd-accounts?'+params+'&format=csv'); assert.equal(csv.status,200); assert((await csv.text()).includes('businessDate'));
 }
 assert.deepEqual(await Promise.all(accounts.map(a=>api('GET',`/fd-accounts/${a.fdaId}/transactions?size=200`))),before);

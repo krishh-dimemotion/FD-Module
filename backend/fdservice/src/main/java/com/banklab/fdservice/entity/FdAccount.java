@@ -54,13 +54,13 @@ public class FdAccount extends FdAuditableEntity {
     @Column(name = "FDA_CCY_CD", length = 3, nullable = false)
     private String ccyCd;
 
-    @Column(name = "FDA_PRINCIPAL_AMT", precision = 18, scale = 2, nullable = false)
+    @Column(name = "FDA_PRINCIPAL_AMT", precision = 20, scale = 4, nullable = false)
     private BigDecimal principalAmt;
 
-    @Column(name = "FDA_PRINCIPAL_BAL", precision = 18, scale = 2)
+    @Column(name = "FDA_PRINCIPAL_BAL", precision = 20, scale = 4)
     private BigDecimal principalBal;
 
-    @Column(name = "FDA_ACCRUED_INT_AMT", precision = 18, scale = 4)
+    @Column(name = "FDA_ACCRUED_INT_AMT", precision = 20, scale = 4)
     private BigDecimal accruedIntAmt;
 
     @Column(name = "FDA_INT_RT", precision = 6, scale = 4)
@@ -78,6 +78,9 @@ public class FdAccount extends FdAuditableEntity {
     @Column(name = "FDA_DAY_COUNT_CONV", length = 10)
     private String dayCountConv;
 
+    @Column(name = "FDA_TAX_ENABLED")
+    private Boolean taxEnabled;
+
     @Column(name = "FDA_TDS_RT", precision = 6, scale = 4)
     private BigDecimal tdsRt;
 
@@ -93,7 +96,7 @@ public class FdAccount extends FdAuditableEntity {
     @Column(name = "FDA_MAT_DT")
     private LocalDate matDt;
 
-    @Column(name = "FDA_MAT_AMT", precision = 18, scale = 2)
+    @Column(name = "FDA_MAT_AMT", precision = 20, scale = 4)
     private BigDecimal matAmt;
 
     @Column(name = "FDA_MAT_INSTRUCTION", length = 30)

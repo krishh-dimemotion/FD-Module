@@ -35,6 +35,9 @@ public class MaturityRenewalService {
     private final InterestCalculator interestCalculator;
     private final FdLedgerService ledger;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.banklab.fdservice.tax.TaxService taxes;
+
     @Value("${fd.account-number.default-branch-cd}")
     private String defaultBranchCd;
 
@@ -50,6 +53,7 @@ public class MaturityRenewalService {
 
         UUID transactionGroup = UUID.randomUUID();
         if (interestPosting.hasContractedRate(oldAccount)) {
+            interestPosting.prepareClosureTax(oldAccount,oldAccount.getMatDt());
             interestPosting.bringAccrualTo(oldAccount, oldAccount.getMatDt(), renewalDate, FdLedgerService.API_USER);
             interestPosting.settleAccruedInterest(oldAccount, oldAccount.getMatDt(), renewalDate, transactionGroup,
                     FdLedgerService.API_USER);
@@ -88,6 +92,7 @@ public class MaturityRenewalService {
 
     private FdAccount renewedCopy(FdAccount oldAccount, BigDecimal amount, int tenureMonths, LocalDate renewalDate) {
         FdAccount renewed = FdAccount.builder()
+                .taxEnabled(taxes != null && taxes.enabledForNew())
                 .fdaId(UUID.randomUUID())
                 .acctNum(accountNumberGenerator.generateAccountNumber(defaultBranchCd))
                 .custId(oldAccount.getCustId())
@@ -117,7 +122,8 @@ public class MaturityRenewalService {
                 .efctvDt(renewalDate)
                 .build();
         renewed.setMatAmt(interestCalculator.calculate(amount,
-                InterestTerms.fromAccount(renewed, defaultInterestType), renewed.getValueDt(), renewed.getMatDt())
+                InterestTerms.fromAccount(renewed, defaultInterestType), renewed.getValueDt(), renewed.getMatDt(),
+                taxes == null ? (gross,date)->BigDecimal.ZERO : taxes.session(renewed,renewed.getValueDt(),renewed.getMatDt(),false)::assess)
                 .maturityValue());
         renewed.stampAudit(FdLedgerService.API_USER, "C");
         return renewed;

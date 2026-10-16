@@ -49,3 +49,18 @@ test('upstream validation errors pass through unchanged', async t => {
   const gateway = await serve(t,createGateway({fdUpstream:upstream,reportUpstream:upstream}));
   const response=await fetch(gateway+'/fd/v1/reports/fd-accounts'); assert.equal(response.status,400);assert.equal((await response.json()).message,'bad date');
 });
+
+test('forwards PDF bytes and attachment headers without changing binary data', async t => {
+  const bytes = Buffer.from([37,80,68,70,45,49,46,55,10,0,255,128,10]);
+  const reports = await serve(t, http.createServer((req,res) => {
+    assert.equal(req.url, '/reports/fd-accounts?reportType=TDS_COMPLIANCE&format=pdf');
+    res.writeHead(200, {'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="tax.pdf"','Cache-Control':'no-store'});
+    res.end(bytes);
+  }));
+  const gateway = await serve(t, createGateway({ fdUpstream: reports, reportUpstream: reports }));
+  const result = await fetch(gateway+'/fd/v1/reports/fd-accounts?reportType=TDS_COMPLIANCE&format=pdf');
+  assert.equal(result.headers.get('content-type'),'application/pdf');
+  assert.equal(result.headers.get('content-disposition'),'attachment; filename="tax.pdf"');
+  assert.equal(result.headers.get('cache-control'),'no-store');
+  assert.deepEqual(Buffer.from(await result.arrayBuffer()),bytes);
+});

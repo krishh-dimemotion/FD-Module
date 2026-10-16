@@ -13,8 +13,11 @@ public record FdTransaction(
         String txnGrpId,
         String txnType,
         String drCr,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal amt,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal balBefore,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal balAfter,
         String ccyCd,
         LocalDate txnDt,

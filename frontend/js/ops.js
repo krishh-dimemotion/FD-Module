@@ -6,10 +6,10 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 let currentAccountId = null;
 let currentBusinessDate = null;
+let currentCurrency = 'INR';
 
-function formatMoney(value) {
-  if (value === null || value === undefined) return '—';
-  return Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+function formatMoney(value, currency = currentCurrency) {
+  return Money.exact(value, currency);
 }
 
 function formatTimestamp(value) {
@@ -191,6 +191,7 @@ async function loadAccount(fdaId) {
     apiRequest('GET', `/fd-accounts/${fdaId}/transactions?size=200`),
   ]);
   currentAccountId = account.fdaId;
+  currentCurrency = account.currencyCode;
   byId('account-section').hidden = false;
 
   renderKeyValues(byId('account-view'), [
@@ -198,7 +199,7 @@ async function loadAccount(fdaId) {
     ['Status', badge(account.status)],
     ['Customer', `${account.custNameSnap || ''} (${account.custId})`],
     ['Product', account.prdNameSnap || account.productCode],
-    ['Principal', `${formatMoney(account.principalAmt)} ${account.currencyCode}`],
+    ['Principal', formatMoney(account.principalAmt)],
     ['Current balance', formatMoney(account.principalBal)],
     ['Accrued interest', formatMoney(account.accruedIntAmt)],
     ['Rate', account.intRt === null ? '—' : `${Number(account.intRt).toFixed(2)}%`],
@@ -206,7 +207,8 @@ async function loadAccount(fdaId) {
     ['Compounding / payout', `${account.compoundFreq || '—'} / ${account.payoutFreq || '—'}`],
     ['Value date', account.valueDt],
     ['Maturity date', account.matDt],
-    ['Quoted maturity amount', formatMoney(account.matAmt)],
+    ['Demo tax', account.taxEnabled ? 'Applies at settlement; estimates depend on other account activity' : 'Disabled for this contract'],
+    ['Projected net maturity', formatMoney(account.matAmt)],
     ['Last accrual', account.lastAccrualDt],
     ['Last capitalization', account.lastCaptlzDt],
     ['Closed on', account.closureDt],
@@ -266,9 +268,10 @@ byId('preview-form').addEventListener('submit', (event) => {
       ['Rate', `${Number(preview.rate).toFixed(2)}%`],
       ['Days', preview.days],
       ['Day count', preview.dayCountConvention],
-      ['Interest', `${formatMoney(preview.interestAmount)} ${preview.currencyCode}`],
+      ['Interest', formatMoney(preview.interestAmount, preview.currencyCode)],
       ['Paid out during period', formatMoney(preview.interestPaidOut)],
-      ['Value at period end', formatMoney(preview.maturityValue)],
+      ['Estimated demo tax', formatMoney(preview.estimatedTax)],
+      ['Projected net value at period end', formatMoney(preview.maturityValue)],
     ]);
   });
 });
@@ -293,6 +296,7 @@ byId('withdraw-confirm-btn').addEventListener('click', (event) =>
       ['Withdrawal date', result.withdrawalDate],
       ['Interest earned', formatMoney(result.interestEarned)],
       ['Final interest credited', formatMoney(result.finalInterest)],
+      ['Demo tax deducted', formatMoney(result.taxDeducted)],
       ['Penalty applied', formatMoney(result.penaltyApplied)],
       ['Paid out', formatMoney(result.withdrawalAmount)],
     ]);
@@ -340,7 +344,7 @@ async function loadGlAccounts() {
     { value: (g) => g.name },
     { value: (g) => g.type },
     { value: (g) => g.currencyCode },
-    { value: (g) => formatMoney(g.currentBalance), numeric: true },
+    { value: (g) => formatMoney(g.currentBalance, g.currencyCode), numeric: true },
   ], 'No GL accounts');
 }
 

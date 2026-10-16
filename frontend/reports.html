@@ -16,7 +16,7 @@
       <div class="inline-form">
         <label for="report-type">Report<select id="report-type">
           <option value="TOTAL_LIABILITY">Total liability</option><option value="PORTFOLIO_SUMMARY">Portfolio summary</option>
-          <option value="MONTHLY_GROWTH">Monthly growth</option><option value="TDS_COMPLIANCE">TDS compliance</option>
+          <option value="MONTHLY_GROWTH">Monthly growth</option><option value="TDS_COMPLIANCE">Demo tax summary</option>
           <option value="MATURITY_SCHEDULE">Maturity schedule</option><option value="ACCOUNT_STATEMENT">Account statement</option>
         </select></label>
         <label for="report-customer">Customer ID (optional)<input id="report-customer" type="text" placeholder="All customers" maxlength="32"></label>
@@ -28,7 +28,7 @@
         <button type="button" id="load-accounts" class="secondary">Refresh accounts</button>
       </div>
       <p id="report-help" class="hint">Current active balances plus accrued interest, rounded per account.</p>
-      <div class="inline-form"><button type="submit" id="generate-report" class="primary">Generate report</button><button type="button" id="download-csv" class="secondary" disabled>Download CSV</button></div>
+      <div class="inline-form"><button type="submit" id="generate-report" class="primary">Generate report</button><button type="button" id="download-csv" class="secondary" disabled>Download CSV</button><button type="button" id="download-pdf" class="secondary" disabled>Download PDF</button></div>
     </form>
   </section>
   <div id="report-error" class="errors" role="alert" hidden></div>
@@ -37,6 +37,7 @@
     <div class="panel-head"><h2 id="results-heading">Results</h2><span id="row-count" class="badge"></span></div>
     <p id="report-period" class="hint"></p>
     <div id="report-warnings" class="errors" hidden></div>
+    <div id="summary-cards" class="summary-cards"></div>
     <h3 id="totals-label" hidden>Totals by currency</h3><div id="report-totals" class="table-wrap"></div>
     <h3>Report rows</h3><div id="report-table" class="table-wrap"></div>
   </section>
@@ -45,8 +46,8 @@
     <p class="hint">Invented local sample rates. Conversion is illustrative and never changes deposits or report totals.</p>
     <form id="fx-form" class="inline-form">
       <label for="fx-amount">Amount<input id="fx-amount" type="text" inputmode="decimal" value="100" pattern="[0-9]+(\.[0-9]+)?" required></label>
-      <label for="fx-from">From<select id="fx-from"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option></select></label>
-      <label for="fx-to">To<select id="fx-to"><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option></select></label>
+      <label for="fx-from">From<select id="fx-from"><option>USD</option><option>INR</option><option>EUR</option><option>GBP</option><option>JPY</option><option>BHD</option><option>KWD</option></select></label>
+      <label for="fx-to">To<select id="fx-to"><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option><option>JPY</option><option>BHD</option><option>KWD</option></select></label>
       <label for="fx-date">Rate date (optional)<input id="fx-date" type="date"></label>
       <button id="convert-fx" class="primary" type="submit">Convert</button>
     </form>
@@ -54,6 +55,7 @@
     <div id="fx-rates" class="table-wrap"></div>
   </section>
 </main>
+<script src="js/money.js"></script>
 <script src="js/api.js"></script><script src="js/reports.js"></script>
 </body>
 </html>

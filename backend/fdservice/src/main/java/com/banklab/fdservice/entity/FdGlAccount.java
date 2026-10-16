@@ -28,7 +28,7 @@ public class FdGlAccount extends FdAuditableEntity {
 
     @EqualsAndHashCode.Include
     @Id
-    @Column(name = "FDGL_CD", length = 20)
+    @Column(name = "FDGL_CD", length = 64)
     private String fdglCd;
 
     @Column(name = "FDGL_NAME", length = 100)
@@ -40,7 +40,7 @@ public class FdGlAccount extends FdAuditableEntity {
     @Column(name = "FDGL_CCY_CD", length = 3)
     private String ccyCd;
 
-    @Column(name = "FDGL_CURRENT_BAL", precision = 18, scale = 2)
+    @Column(name = "FDGL_CURRENT_BAL", precision = 20, scale = 4)
     private BigDecimal currentBal;
 
     @Column(name = "FDGL_IS_ACTIVE")

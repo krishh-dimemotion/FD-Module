@@ -23,8 +23,11 @@ public record FdAccount(
         String rateId,
         String categoryCd,
         String currencyCode,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal principalAmt,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal principalBal,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal accruedIntAmt,
         BigDecimal intRt,
         InterestType interestType,
@@ -35,6 +38,7 @@ public record FdAccount(
         LocalDate openDt,
         LocalDate valueDt,
         LocalDate matDt,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal matAmt,
         MaturityInstruction matInstruction,
         AccountStatus status,
@@ -44,5 +48,6 @@ public record FdAccount(
         String renewedFromId,
         String custNameSnap,
         String prdNameSnap,
-        Integer ccyDecimals) {
+        Integer ccyDecimals,
+        Boolean taxEnabled) {
 }

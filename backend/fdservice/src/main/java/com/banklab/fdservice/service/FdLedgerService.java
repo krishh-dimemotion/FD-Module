@@ -63,7 +63,7 @@ public class FdLedgerService {
     @Transactional
     public FdTransaction postDeposit(FdAccount account, LocalDate businessDate, UUID txnGroupId, String userId) {
         BigDecimal amount = account.getPrincipalAmt();
-        return post(new Posting(account, FdTxnType.DEPOSIT, CREDIT, amount, BigDecimal.ZERO.setScale(2), amount,
+        return post(new Posting(account, FdTxnType.DEPOSIT, CREDIT, amount, BigDecimal.ZERO.setScale(CurrencyDecimals.forCurrency(account.getCcyCd())), amount,
                 account.getValueDt(), businessDate, txnGroupId, "Initial deposit",
                 glAccounts.settlementCd(), glAccounts.depositLiabilityCd(), userId));
     }
@@ -84,6 +84,8 @@ public class FdLedgerService {
         BigDecimal value = amount.abs();
         String debitCd = reversal ? glAccounts.interestPayableCd() : glAccounts.interestExpenseCd();
         String creditCd = reversal ? glAccounts.interestExpenseCd() : glAccounts.interestPayableCd();
+        debitCd = glAccounts.inCurrency(debitCd, account.getCcyCd());
+        creditCd = glAccounts.inCurrency(creditCd, account.getCcyCd());
         UUID group = UUID.randomUUID();
         String narrative = (reversal ? "INTEREST_ACCRUAL_REVERSAL " : "INTEREST_ACCRUAL ") + account.getAcctNum()
                 + " to " + accruedThrough;
@@ -173,6 +175,21 @@ public class FdLedgerService {
         return txn;
     }
 
+    /** Tax on a cash payout has no effect on the deposit balance. */
+    @Transactional
+    public FdTransaction postTax(FdAccount account, BigDecimal amount, BigDecimal rate,
+            LocalDate valueDate, LocalDate businessDate, UUID group, String user, boolean capitalized) {
+        BigDecimal before = account.getPrincipalBal();
+        BigDecimal after = capitalized ? before.subtract(amount) : before;
+        FdTransaction txn = post(new Posting(account, FdTxnType.TDS, DEBIT, amount, before, after,
+                valueDate, businessDate, group, "DEMO withholding - not a statutory certificate",
+                capitalized ? glAccounts.depositLiabilityCd() : glAccounts.settlementCd(),
+                glAccounts.taxPayableCd(), user));
+        txn.setTdsRt(rate);
+        account.setPrincipalBal(after);
+        return txn;
+    }
+
     private FdTransaction postDebit(FdAccount account, FdTxnType type, BigDecimal amount, LocalDate businessDate,
             UUID txnGroupId, String remarks, String creditGlCd, String userId) {
         BigDecimal before = account.getPrincipalBal();
@@ -210,13 +227,15 @@ public class FdLedgerService {
         txn.stampAudit(p.userId(), "C");
         FdTransaction saved = transactionRepository.save(txn);
 
+        String debit = glAccounts.inCurrency(p.debitGlCd(), p.account().getCcyCd());
+        String credit = glAccounts.inCurrency(p.creditGlCd(), p.account().getCcyCd());
         String narrative = p.type() + " " + p.account().getAcctNum();
         glEntryRepository.saveAll(List.of(
-                glLeg(saved.getFdtId(), p.txnGroupId(), p.debitGlCd(), DEBIT, p.amount(), p.businessDate(),
+                glLeg(saved.getFdtId(), p.txnGroupId(), debit, DEBIT, p.amount(), p.businessDate(),
                         narrative, p.userId()),
-                glLeg(saved.getFdtId(), p.txnGroupId(), p.creditGlCd(), CREDIT, p.amount(), p.businessDate(),
+                glLeg(saved.getFdtId(), p.txnGroupId(), credit, CREDIT, p.amount(), p.businessDate(),
                         narrative, p.userId())));
-        glAccounts.applyPosting(p.debitGlCd(), p.creditGlCd(), p.amount());
+        glAccounts.applyPosting(debit, credit, p.amount());
         return saved;
     }
 

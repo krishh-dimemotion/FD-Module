@@ -33,8 +33,8 @@ public final class FdAccountMapper {
                 .rateId(entity.getRateId())
                 .categoryCd(entity.getCategoryCd())
                 .currencyCode(entity.getCcyCd())
-                .principalAmt(entity.getPrincipalAmt())
-                .principalBal(entity.getPrincipalBal())
+                .principalAmt(money(entity.getPrincipalAmt(),entity.getCcyCd()))
+                .principalBal(money(entity.getPrincipalBal(),entity.getCcyCd()))
                 .accruedIntAmt(entity.getAccruedIntAmt())
                 .intRt(entity.getIntRt())
                 .interestType(parseEnum(InterestType.class, entity.getIntTyp()))
@@ -45,7 +45,7 @@ public final class FdAccountMapper {
                 .openDt(entity.getOpenDt())
                 .valueDt(entity.getValueDt())
                 .matDt(entity.getMatDt())
-                .matAmt(entity.getMatAmt())
+                .matAmt(money(entity.getMatAmt(),entity.getCcyCd()))
                 .matInstruction(parseEnum(MaturityInstruction.class, entity.getMatInstruction()))
                 .status(parseEnum(AccountStatus.class, entity.getSts()))
                 .lastAccrualDt(entity.getLastAccrualDt())
@@ -54,13 +54,15 @@ public final class FdAccountMapper {
                 .renewedFromId(entity.getRenewedFromId() != null ? entity.getRenewedFromId().toString() : null)
                 .custNameSnap(entity.getCustNameSnap())
                 .prdNameSnap(entity.getPrdNameSnap())
+                .taxEnabled(Boolean.TRUE.equals(entity.getTaxEnabled()))
                 .ccyDecimals(entity.getCcyDecimals())
                 .build();
     }
 
     public static FdAccountSummary toSummary(FdAccount entity) {
         return new FdAccountSummary(entity.getFdaId().toString(), entity.getAcctNum(), entity.getSts(),
-                entity.getPrincipalBal(), entity.getMatDt(), entity.getPrdCode(), entity.getCustNameSnap());
+                money(entity.getPrincipalBal(),entity.getCcyCd()), entity.getMatDt(), entity.getPrdCode(), entity.getCustNameSnap(),
+                entity.getCcyCd(),entity.getCcyDecimals());
     }
 
     public static com.banklab.fdservice.dto.FdTransaction toResponse(FdTransaction entity) {
@@ -70,9 +72,9 @@ public final class FdAccountMapper {
                 entity.getTxnGrpId().toString(),
                 entity.getTxnTyp(),
                 entity.getDrCr(),
-                entity.getAmt(),
-                entity.getBalBefore(),
-                entity.getBalAfter(),
+                money(entity.getAmt(),entity.getCcyCd()),
+                money(entity.getBalBefore(),entity.getCcyCd()),
+                money(entity.getBalAfter(),entity.getCcyCd()),
                 entity.getCcyCd(),
                 entity.getTxnDt(),
                 entity.getValueDt(),
@@ -102,7 +104,11 @@ public final class FdAccountMapper {
 
     public static GlAccountView toResponse(FdGlAccount entity) {
         return new GlAccountView(entity.getFdglCd(), entity.getName(), entity.getTyp(), entity.getCcyCd(),
-                entity.getCurrentBal(), entity.getIsActive());
+                money(entity.getCurrentBal(),entity.getCcyCd()), entity.getIsActive());
+    }
+
+    private static java.math.BigDecimal money(java.math.BigDecimal amount,String currency) {
+        return amount==null?null:amount.setScale(CurrencyDecimals.forCurrency(currency),java.math.RoundingMode.UNNECESSARY);
     }
 
     private static <T extends Enum<T>> T parseEnum(Class<T> type, String value) {

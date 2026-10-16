@@ -223,7 +223,8 @@ class InterestCalculatorTest {
         assertThat(CurrencyDecimals.forCurrency("INR")).isEqualTo(2);
         assertThat(CurrencyDecimals.forCurrency("JPY")).isZero();
         assertThat(CurrencyDecimals.forCurrency("KWD")).isEqualTo(3);
-        assertThat(CurrencyDecimals.forCurrency("NOPE")).isEqualTo(2);
+        assertThatThrownBy(() -> CurrencyDecimals.forCurrency("NOPE")).isInstanceOf(InvalidPrincipalException.class);
+        assertThat(CurrencyDecimals.forCurrency("BHD")).isEqualTo(3);
     }
 
     static InterestTerms terms(String rate, InterestType type, InterestFrequency frequency,

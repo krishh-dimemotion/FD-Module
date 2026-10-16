@@ -17,6 +17,8 @@ public final class FdTestDatabase {
     }
 
     public void clearFdData() {
+        jdbc.update("DELETE FROM FD_TAX_EVENTS");
+        jdbc.update("DELETE FROM FD_TAX_YEARS");
         jdbc.update("DELETE FROM FD_GL_ENTRIES");
         jdbc.update("UPDATE FD_TRANSACTIONS SET FDT_REVERSAL_OF_ID = NULL");
         jdbc.update("DELETE FROM FD_TRANSACTIONS");

@@ -70,7 +70,7 @@ class ReportServiceTest {
         assertThat(result.totals()).hasSize(2);
         assertThat(result.totals().getFirst()).containsEntry("financialYear","2025-2026").containsEntry("netDeduction","10.00");
         assertThat(result.totals().getLast()).containsEntry("financialYear","2026-2027").containsEntry("netDeduction","3.00");
-        assertThat(result.warnings()).hasSize(1);
+        assertThat(result.warnings()).anySatisfy(w -> assertThat(w).contains("Missing PAN"));
         assertThat(reports.generate(ReportType.TDS_COMPLIANCE,"","",null,null).fromDate()).isEqualTo(d("2026-04-01"));
     }
     @Test void invalidRangesTypesAndMissingAccountsFailClearly() {

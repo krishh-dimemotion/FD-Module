@@ -28,6 +28,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class FdAccountQueryService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.banklab.fdservice.tax.TaxService taxes;
+
     private static final int MAX_PAGE_SIZE = 200;
 
     private final FdAccountRepository accountRepository;
@@ -69,7 +72,8 @@ public class FdAccountQueryService {
         InterestTerms terms = interestPosting.termsOf(account);
         var principal = account.getPrincipalBal() != null ? account.getPrincipalBal() : account.getPrincipalAmt();
         InterestCalculation result = interestCalculator.calculate(principal, terms, request.periodStart(),
-                request.periodEnd());
+                request.periodEnd(), taxes==null ? (gross,date)->java.math.BigDecimal.ZERO
+                : taxes.session(account,request.periodStart(),request.periodEnd(),false)::assess);
         return new InterestPreviewResponse(
                 principal,
                 terms.annualRatePct(),
@@ -83,7 +87,7 @@ public class FdAccountQueryService {
                 account.getPayoutFreq(),
                 result.days(),
                 result.interestPaidOut(),
-                result.maturityValue());
+                result.maturityValue(),result.taxAmount(),Boolean.TRUE.equals(account.getTaxEnabled()));
     }
 
     private FdAccount find(UUID fdaId) {

@@ -18,8 +18,12 @@ public class ReportController {
     public ResponseEntity<?> report(@RequestParam ReportType reportType,@RequestParam(defaultValue="") String custId,
         @RequestParam(defaultValue="") String accountId,@RequestParam(required=false) LocalDate fromDate,
         @RequestParam(required=false) LocalDate toDate,@RequestParam(defaultValue="json") String format) {
-        if (!format.equals("json")&&!format.equals("csv")) throw ApiException.invalid("format must be json or csv");
+        if (!format.equals("json")&&!format.equals("csv")&&!format.equals("pdf")) throw ApiException.invalid("format must be json, csv or pdf");
         ReportResult result=reports.generate(reportType,custId.trim(),accountId.trim(),fromDate,toDate);
+        if (format.equals("pdf")) return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+            .header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\""+reportType.name().toLowerCase(java.util.Locale.ROOT)+".pdf\"")
+            .header(HttpHeaders.CACHE_CONTROL,"no-store").body(PdfReports.render(result,Map.of("Customer",custId.isBlank()?"All customers":custId.trim(),
+                "Account",accountId.isBlank()?"All accounts":accountId.trim())));
         if (format.equals("csv")) return ResponseEntity.ok().contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
             .header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\""+reportType.name().toLowerCase(java.util.Locale.ROOT)+".csv\"")
             .header(HttpHeaders.CACHE_CONTROL,"no-store").body(CsvReports.render(result));

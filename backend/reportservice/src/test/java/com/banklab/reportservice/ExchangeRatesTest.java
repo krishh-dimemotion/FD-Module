@@ -22,7 +22,7 @@ class ExchangeRatesTest {
     }
     @Test void rejectsUnknownDatesCurrenciesAndInvalidAmounts() {
         assertThatThrownBy(()->fx.lookup("INR",LocalDate.parse("2025-12-31"))).hasMessageContaining("No demo rate");
-        assertThatThrownBy(()->fx.lookup("JPY",LocalDate.parse("2026-01-01"))).hasMessageContaining("No demo rate");
+        assertThatThrownBy(()->fx.lookup("CHF",LocalDate.parse("2026-01-01"))).hasMessageContaining("No demo rate");
         assertThatThrownBy(()->fx.lookup("NOPE",LocalDate.parse("2026-01-01"))).hasMessageContaining("three-letter");
         assertThatThrownBy(()->fx.convert("USD","INR",new BigDecimal("-1"),LocalDate.parse("2026-01-01"))).hasMessageContaining("nonnegative");
         assertThatThrownBy(()->fx.convert("USD","INR",new BigDecimal("1E+1000"),LocalDate.parse("2026-01-01"))).isInstanceOf(ApiException.class);

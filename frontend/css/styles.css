@@ -406,3 +406,7 @@ td.empty {
   .inline-form > label { width: 100%; }
   .inline-form input { width: 100%; min-width: 0; }
 }
+
+.summary-cards { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.summary-card { display: grid; gap: 5px; padding: 16px; border: 1px solid #dce4ee; border-radius: 8px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.summary-card strong { font-size: 1.2rem; }

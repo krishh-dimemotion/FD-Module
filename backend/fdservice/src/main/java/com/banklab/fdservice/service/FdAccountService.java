@@ -50,6 +50,9 @@ public class FdAccountService {
     private final InterestCalculator interestCalculator;
     private final FdLedgerService ledgerService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.banklab.fdservice.tax.TaxService taxes;
+
     @Value("${fd.account-number.default-branch-cd}")
     private String defaultBranchCd;
 
@@ -110,18 +113,19 @@ public class FdAccountService {
 
     /**
      * The principal must fit the currency's minor units and FDA_PRINCIPAL_AMT's
-     * DECIMAL(18,2) — otherwise MySQL silently rounds the stored amount while the
+     * DECIMAL(20,4) — otherwise MySQL silently rounds the stored amount while the
      * maturity quote was computed on the unrounded one.
      */
     private static void validatePrincipalPrecision(BigDecimal principal, String currency) {
         int allowed = Math.min(CurrencyDecimals.forCurrency(currency), PRINCIPAL_COLUMN_SCALE);
+        if (principal.precision() - principal.scale() > 16) throw new InvalidPrincipalException("principal exceeds 16 integer digits");
         if (principal.stripTrailingZeros().scale() > allowed) {
             throw new InvalidPrincipalException("principal " + principal.toPlainString() + " has more than "
                     + allowed + " decimal place(s) allowed for " + currency);
         }
     }
 
-    private static final int PRINCIPAL_COLUMN_SCALE = 2;
+    private static final int PRINCIPAL_COLUMN_SCALE = 4;
 
     private void validateRoleCardinality(List<AssignRoleRequest> initialRoles) {
         requireAtMostOne(initialRoles, RoleType.GUARANTOR);
@@ -142,14 +146,16 @@ public class FdAccountService {
      */
     private BigDecimal quoteMaturityAmount(FdAccount account) {
         InterestTerms terms = InterestTerms.fromAccount(account, defaultInterestType);
-        return interestCalculator.calculate(account.getPrincipalAmt(), terms, account.getValueDt(), account.getMatDt())
+        return interestCalculator.calculate(account.getPrincipalAmt(), terms, account.getValueDt(), account.getMatDt(),
+                taxes == null ? (gross,date)->BigDecimal.ZERO : taxes.session(account,account.getValueDt(),account.getMatDt(),false)::assess)
                 .maturityValue();
     }
 
     private FdAccount buildAccount(CreateFdAccountRequest request, String accountNumber, CustomerDto customer,
             ProductDetails product, RateDetails rate, LocalDate openDt, LocalDate matDt) {
-        String currency = firstNonBlank(request.currencyCode(), product.currency());
+        String currency = CurrencyDecimals.normalize(firstNonBlank(request.currencyCode(), product.currency()));
         return FdAccount.builder()
+                .taxEnabled(taxes != null && taxes.enabledForNew())
                 .fdaId(UUID.randomUUID())
                 .acctNum(accountNumber)
                 .custId(request.custId())

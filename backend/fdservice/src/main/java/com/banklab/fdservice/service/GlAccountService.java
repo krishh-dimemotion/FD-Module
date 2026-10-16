@@ -54,6 +54,25 @@ public class GlAccountService {
     @Value("${fd.gl.currency}")
     private String glCurrency;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    public String taxPayableCd() { return "FD_TAX_PAYABLE"; }
+
+    /** Keep configured INR codes; foreign ledgers carry an explicit ISO suffix. */
+    public String inCurrency(String baseCode, String currency) {
+        if (currency.equals(glCurrency)) return baseCode;
+        String code = baseCode + "_" + currency;
+        if (repository.existsById(code)) return code;
+        FdGlAccount template=repository.findById(baseCode).orElseThrow(()->new GlAccountNotConfiguredException("Missing GL template " + baseCode));
+        jdbc.update("""
+            INSERT IGNORE INTO FD_GL_ACCOUNTS
+            (FDGL_CD,FDGL_NAME,FDGL_TYP,FDGL_CCY_CD,FDGL_CURRENT_BAL,FDGL_IS_ACTIVE,FDGL_EFCTV_DT,USER_ID,CRUD_VALUE)
+            VALUES (?,?,?,?,0,true,?,'FD_SYSTEM','C')
+            """,code,template.getName(),template.getTyp(),currency,template.getEfctvDt());
+        return code;
+    }
+
     public String depositLiabilityCd() {
         return depositLiabilityCd;
     }
@@ -150,6 +169,7 @@ public class GlAccountService {
         defaults.put(interestExpenseCd, new GlDefinition("Interest Expense on Fixed Deposits", GlAccountType.EXPENSE));
         defaults.put(interestPayableCd, new GlDefinition("Interest Payable on Fixed Deposits", GlAccountType.LIABILITY));
         defaults.put(settlementCd, new GlDefinition("Customer Settlement Clearing", GlAccountType.ASSET));
+        defaults.put(taxPayableCd(), new GlDefinition("Demo Withholding Tax Payable", GlAccountType.LIABILITY));
         defaults.put(penaltyIncomeCd, new GlDefinition("Premature Withdrawal Penalty Income", GlAccountType.INCOME));
         return defaults;
     }

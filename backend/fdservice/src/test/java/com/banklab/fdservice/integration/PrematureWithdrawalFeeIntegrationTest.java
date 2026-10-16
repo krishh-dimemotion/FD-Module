@@ -25,7 +25,7 @@ class PrematureWithdrawalFeeIntegrationTest extends FdIntegrationTestSupport {
     void sameDayFeeExceedsInterestAndIsCappedAtBalance(String principal, String penalty, String payout) throws Exception {
         UUID id = createAccount(accountJson(principal, 12, "RATE-12M", "COMPOUND", "QUARTERLY", "ON_MATURITY"));
         String quote = mockMvc.perform(post("/fd-accounts/{id}/withdrawal-quote", id))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.interestEarned").value(0))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.interestEarned").value("0.00"))
                 .andReturn().getResponse().getContentAsString();
         withdraw(id, "{\"remarks\":\"Fee closure\",\"expectedQuote\":" + quote + "}")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.account.status").value("CLOSED"))

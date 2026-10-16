@@ -6,8 +6,8 @@ public final class CsvReports {
     private CsvReports() { }
     public static List<String> fields(ReportType type) {
         return switch(type) {
-            case PORTFOLIO_SUMMARY,TOTAL_LIABILITY,MATURITY_SCHEDULE -> List.of("accountId","accountNumber","customerId","customerName","productCode","productName","currency","status","openDate","maturityDate","principal","depositBalance","accruedInterest","totalLiability","projectedMaturityAmount","accountCount");
-            case TDS_COMPLIANCE -> List.of("transactionId","accountId","accountNumber","customerId","customerName","currency","date","financialYear","pan","taxRate","netDeduction");
+            case PORTFOLIO_SUMMARY,TOTAL_LIABILITY,MATURITY_SCHEDULE -> List.of("accountId","accountNumber","customerId","customerName","productCode","productName","currency","status","openDate","maturityDate","principal","depositBalance","accruedInterest","totalLiability","projectedMaturityAmount","accountCount","taxEnabled");
+            case TDS_COMPLIANCE -> List.of("transactionId","accountId","accountNumber","customerId","customerName","currency","date","financialYear","pan","taxRate","netDeduction","policyVersion","taxableAmount");
             case MONTHLY_GROWTH -> List.of("month","fromDate","toDate","currency","openingBalance","closingBalance","netGrowth","growthPercent","newDeposits","closurePayouts","renewalIn","renewalOut","accountsOpened","accountsClosed");
             case ACCOUNT_STATEMENT -> List.of("transactionId","date","type","direction","amount","balanceChange","runningBalance","currency","remarks","accountId","accountNumber","customerId","customerName","openingBalance","closingBalance");
         };

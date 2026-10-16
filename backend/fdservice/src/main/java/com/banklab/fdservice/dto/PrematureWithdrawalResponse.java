@@ -18,11 +18,17 @@ public record PrematureWithdrawalResponse(
         String status,
         String message,
         LocalDate withdrawalDate,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal interestEarned,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal finalInterest,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal penaltyApplied,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
         BigDecimal withdrawalAmount,
         FdAccount account,
         UUID txnGrpId,
-        List<Long> transactionIds) {
+        List<Long> transactionIds,
+        @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING)
+        BigDecimal taxDeducted) {
 }

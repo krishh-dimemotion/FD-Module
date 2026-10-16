@@ -45,7 +45,7 @@ public class PrematureWithdrawalService {
     public WithdrawalQuoteResponse quote(UUID fdaId) {
         FdAccount account = accountRepository.findById(fdaId)
                 .orElseThrow(() -> new FdAccountNotFoundException(fdaId));
-        return calculate(account, businessClock.currentBusinessDate());
+        return calculate(account, businessClock.currentBusinessDate(),false);
     }
 
     @Transactional
@@ -53,7 +53,8 @@ public class PrematureWithdrawalService {
         FdAccount account = accountRepository.lockById(fdaId).orElseThrow(() -> new FdAccountNotFoundException(fdaId));
         LocalDate withdrawalDate = businessClock.currentBusinessDate();
         // TODO G1: enforce owner or BANK_OFFICER here and on quote once JWT claims exist.
-        WithdrawalQuoteResponse quote = calculate(account, withdrawalDate);
+        interestPosting.prepareClosureTax(account,withdrawalDate);
+        WithdrawalQuoteResponse quote = calculate(account, withdrawalDate,true);
         requireFullWithdrawal(account, request);
         requireUnchangedQuote(quote, request);
 
@@ -63,6 +64,7 @@ public class PrematureWithdrawalService {
         String remarks = request == null ? null : request.remarks();
         BigDecimal finalInterest = BigDecimal.ZERO;
         if (interestPosting.hasContractedRate(account)) {
+            interestPosting.prepareClosureTax(account,withdrawalDate);
             interestPosting.bringAccrualTo(account, withdrawalDate, withdrawalDate, userId);
             finalInterest = interestPosting.settleAccruedInterest(account, withdrawalDate, withdrawalDate, group,
                     userId);
@@ -104,27 +106,27 @@ public class PrematureWithdrawalService {
                 payout,
                 FdAccountMapper.toResponse(account),
                 group,
-                List.copyOf(transactionIds));
+                List.copyOf(transactionIds),quote.taxDeducted());
     }
 
     /** The single calculation for both preview and locked execution. */
-    private WithdrawalQuoteResponse calculate(FdAccount account, LocalDate withdrawalDate) {
+    private WithdrawalQuoteResponse calculate(FdAccount account, LocalDate withdrawalDate,boolean locked) {
         policy.validateEligibility(account.getSts(), account.getValueDt(), account.getMatDt(), withdrawalDate);
         requireAccrualNotAhead(account, withdrawalDate);
         int decimals = account.getCcyDecimals() != null
                 ? account.getCcyDecimals() : CurrencyDecimals.forCurrency(account.getCcyCd());
         BigDecimal balance = account.getPrincipalBal();
         BigDecimal finalInterest = BigDecimal.ZERO;
+        BigDecimal taxDeducted = BigDecimal.ZERO;
         BigDecimal interestEarned = transactionRepository.sumAmountByType(account.getFdaId(), FdTxnType.INTEREST.name());
         if (interestPosting.hasContractedRate(account)) {
             InterestTerms terms = interestPosting.termsOf(account);
             decimals = terms.currencyDecimals();
-            AccrualPlan plan = calculator.planAccrual(AccountInterestState.from(account), terms, withdrawalDate);
-            BigDecimal accrued = plan.noOp()
-                    ? (account.getAccruedIntAmt() == null ? BigDecimal.ZERO : account.getAccruedIntAmt())
-                    : plan.accruedInterest();
-            finalInterest = terms.roundToCurrency(accrued);
-            balance = plan.closingPrincipalBalance().add(finalInterest);
+            var projection = interestPosting.previewClosure(account,withdrawalDate,locked);
+            AccrualPlan plan = projection.plan();
+            finalInterest = projection.finalInterest();
+            taxDeducted = projection.totalTax();
+            balance = projection.closingBalance();
             interestEarned = interestEarned.add(finalInterest);
             for (InterestEvent event : plan.events()) {
                 interestEarned = interestEarned.add(event.amount());
@@ -134,7 +136,7 @@ public class PrematureWithdrawalService {
         return new WithdrawalQuoteResponse(withdrawalDate,
                 interestEarned.setScale(decimals, RoundingMode.HALF_UP),
                 finalInterest.setScale(decimals, RoundingMode.HALF_UP), penalty,
-                balance.subtract(penalty).setScale(decimals, RoundingMode.HALF_UP));
+                balance.subtract(penalty).setScale(decimals, RoundingMode.HALF_UP),taxDeducted.setScale(decimals, RoundingMode.HALF_UP));
     }
 
     private static void requireUnchangedQuote(WithdrawalQuoteResponse actual, PrematureWithdrawalRequest request) {
@@ -146,7 +148,8 @@ public class PrematureWithdrawalService {
                 || actual.interestEarned().compareTo(expected.interestEarned()) != 0
                 || actual.finalInterest().compareTo(expected.finalInterest()) != 0
                 || actual.penaltyApplied().compareTo(expected.penaltyApplied()) != 0
-                || actual.withdrawalAmount().compareTo(expected.withdrawalAmount()) != 0) {
+                || actual.withdrawalAmount().compareTo(expected.withdrawalAmount()) != 0
+                || actual.taxDeducted().compareTo(expected.taxDeducted()==null?BigDecimal.ZERO:expected.taxDeducted()) != 0) {
             throw new AccountNotWithdrawableException(AccountNotWithdrawableException.QUOTE_CHANGED,
                     "The withdrawal quote has changed; request a new quote and confirm it again");
         }

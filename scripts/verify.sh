@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 ./scripts/compose.sh up -d --wait
 ./scripts/compose.sh run --rm verify
 ./scripts/compose.sh run --rm --no-deps gateway node --test
+node --test frontend/tests/money.test.cjs
 node scripts/check-gateway.mjs
 # This must fail because the report database user has SELECT privilege only.
 permissions=$(./scripts/compose.sh exec -T mysql sh -c 'MYSQL_PWD="$REPORT_DB_PASSWORD" mysql -ufd_report fd_db -e "UPDATE FD_BUSINESS_CLOCK SET FDBC_BUSINESS_DT=FDBC_BUSINESS_DT WHERE 1=0"' 2>&1) && {

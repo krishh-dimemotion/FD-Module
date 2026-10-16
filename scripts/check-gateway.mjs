@@ -7,13 +7,14 @@ export async function checkGateway(base = process.env.FD_API_BASE || 'http://loc
     ['Demo FX', '/exchange-rates?base=INR', 200, data => data.source === 'DEMO' && data.base === 'INR' && data.rates.INR === '1.000000000000'],
     ['Validation propagation', '/reports/fd-accounts?reportType=INVALID', 400, data => data.code === 'VALIDATION_ERROR'],
     ['Unknown route', '/unknown', 404, data => data.code === 'NOT_FOUND'],
+    ['PDF download', '/reports/fd-accounts?reportType=TOTAL_LIABILITY&format=pdf', 200, (text, res) => res.headers.get('content-type')?.startsWith('application/pdf') && res.headers.get('content-disposition')?.includes('.pdf') && text.startsWith('%PDF-')],
     ['CSV download', '/reports/fd-accounts?reportType=TOTAL_LIABILITY&format=csv', 200, (text, res) => res.headers.get('content-type')?.startsWith('text/csv') && res.headers.get('content-disposition')?.includes('.csv') && text.includes('totalLiability')],
   ];
   const results = await Promise.all(checks.map(async ([name, path, expected, validate]) => {
     const start = Date.now();
     try {
       const response = await fetch(base.replace(/\/$/, '') + path, { signal: AbortSignal.timeout(12000) });
-      const body = name === 'CSV download' ? await response.text() : await response.json();
+      const body = ['CSV download', 'PDF download'].includes(name) ? await response.text() : await response.json();
       return { name, pass: response.status === expected && Boolean(validate(body, response)), status: response.status, expected, durationMs: Date.now() - start };
     } catch (error) { return { name, pass:false, error:error.message, durationMs:Date.now()-start }; }
   }));

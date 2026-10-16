@@ -18,5 +18,9 @@ public record InterestCalculation(
         BigDecimal totalInterest,
         BigDecimal interestPaidOut,
         BigDecimal maturityValue,
-        long days) {
+        long days,
+        BigDecimal taxAmount) {
+    public InterestCalculation(BigDecimal principal,BigDecimal interest,BigDecimal paid,BigDecimal value,long days) {
+        this(principal,interest,paid,value,days,BigDecimal.ZERO);
+    }
 }

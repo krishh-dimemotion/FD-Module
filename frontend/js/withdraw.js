@@ -56,8 +56,7 @@ function renderValues(id, entries) {
 }
 
 function money(value) {
-  const decimals = selectedAccount.ccyDecimals ?? 2;
-  return `${Number(value).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${selectedAccount.currencyCode}`;
+  return Money.exact(value, selectedAccount.currencyCode);
 }
 
 function quoteValues(quote) {
@@ -65,6 +64,7 @@ function quoteValues(quote) {
     ['Closure date', quote.withdrawalDate],
     ['Lifetime interest earned', money(quote.interestEarned)],
     ['Final interest credited', money(quote.finalInterest)],
+    ['Demo tax deducted', money(quote.taxDeducted || '0')],
     ['Penalty', money(quote.penaltyApplied)],
     ['Amount to be paid', money(quote.withdrawalAmount)],
   ];

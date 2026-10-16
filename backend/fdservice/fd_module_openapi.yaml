@@ -254,19 +254,21 @@ paths:
               schema:
                 type: object
                 properties:
-                  principal: { type: number, format: double }
+                  principal: { $ref: '#/components/schemas/DecimalAmount' }
                   rate: { type: number, format: double }
                   periodStart: { type: string, format: date }
                   periodEnd: { type: string, format: date }
                   dayCountConvention: { type: string, example: "ACT/ACT" }
-                  interestAmount: { type: number, format: double }
+                  interestAmount: { $ref: '#/components/schemas/DecimalAmount' }
                   currencyCode: { type: string, example: "INR" }
                   interestType: { type: string, enum: [SIMPLE, COMPOUND] }
                   compoundingFrequency: { type: string }
                   payoutFrequency: { type: string }
                   days: { type: integer }
-                  interestPaidOut: { type: number, format: double }
-                  maturityValue: { type: number, format: double }
+                  interestPaidOut: { $ref: '#/components/schemas/DecimalAmount' }
+                  estimatedTax: { $ref: '#/components/schemas/DecimalAmount' }
+                  taxEnabled: { type: boolean }
+                  maturityValue: { $ref: '#/components/schemas/DecimalAmount' }
         '400':
           description: periodEnd before periodStart (INVALID_PERIOD)
         '404':
@@ -463,7 +465,7 @@ paths:
         to April 1 through the business date; statements default to account opening through
         the business date. Maturity defaults to business date through twelve months ahead.
         Only maturity schedules allow future toDate. Monetary values are decimal strings;
-        totals remain separate by currency. See README for accounting definitions and CSV sections.
+        totals remain separate by currency. PDF covers all six report types. TDS_COMPLIANCE is a demo withholding summary, not a statutory certificate. Engine tax financial years use settlement value dates. See README for accounting definitions.
       operationId: getFdAccountReport
       parameters:
         - { name: reportType, in: query, required: true, schema: { $ref: '#/components/schemas/ReportType' } }
@@ -471,15 +473,17 @@ paths:
         - { name: accountId, in: query, schema: { type: string, format: uuid }, description: Required for ACCOUNT_STATEMENT; optional account filter for other types. }
         - { name: fromDate, in: query, schema: { type: string, format: date } }
         - { name: toDate, in: query, schema: { type: string, format: date } }
-        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv, pdf], default: json } }
       responses:
         '200':
-          description: Report rows and totals, or a CSV attachment with ROW/TOTAL/WARNING/METADATA sections.
+          description: Report rows and totals, a CSV attachment, or a paginated PDF with identical report data.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ReportResult' }
             text/csv:
               schema: { type: string }
+            application/pdf:
+              schema: { type: string, format: binary }
         '400': { description: "Missing or invalid parameter, invalid date range, or unsupported liability date filters." }
         '404': { description: "Selected account does not exist or does not match custId." }
         '422': { description: "INCOMPLETE_LEDGER_HISTORY, INCOMPLETE_ACCOUNT_BALANCE, or INVALID_CURRENCY_PRECISION." }
@@ -695,7 +699,7 @@ paths:
                     name: { type: string }
                     type: { type: string, enum: [ASSET, LIABILITY, INCOME, EXPENSE] }
                     currencyCode: { type: string }
-                    currentBalance: { type: number, format: double }
+                    currentBalance: { $ref: '#/components/schemas/DecimalAmount' }
                     active: { type: boolean }
 
 components:
@@ -742,7 +746,7 @@ components:
       properties:
         custId: { type: string }
         productCode: { type: string }
-        principal: { type: number, format: double }
+        principal: { $ref: '#/components/schemas/DecimalInput' }
         tenureMonths: { type: integer }
         rateId:
           type: string
@@ -806,10 +810,12 @@ components:
         fdaId: { type: string }
         acctNum: { type: string }
         status: { type: string }
-        principalBal: { type: number, format: double }
+        principalBal: { $ref: '#/components/schemas/DecimalAmount' }
         matDt: { type: string, format: date }
         productCode: { type: string }
         custNameSnap: { type: string }
+        currencyCode: { type: string }
+        ccyDecimals: { type: integer }
 
     FdAccount:
       type: object
@@ -818,22 +824,22 @@ components:
         acctNum: { type: string }
         custId: { type: string }
         productCode: { type: string }
-        rateId: { type: string }
-        categoryCd: { type: string }
+        rateId: { type: string, nullable: true }
+        categoryCd: { type: string, nullable: true }
         currencyCode: { type: string }
-        principalAmt: { type: number, format: double }
-        principalBal: { type: number, format: double }
-        accruedIntAmt: { type: number, format: double }
-        intRt: { type: number, format: double }
+        principalAmt: { $ref: '#/components/schemas/DecimalAmount' }
+        principalBal: { $ref: '#/components/schemas/DecimalAmount' }
+        accruedIntAmt: { $ref: '#/components/schemas/DecimalAmount' }
+        intRt: { type: number, format: double, nullable: true }
         interestType: { type: string, enum: [SIMPLE, COMPOUND] }
-        compoundFreq: { type: string }
-        payoutFreq: { type: string }
-        dayCountConv: { type: string }
+        compoundFreq: { type: string, nullable: true }
+        payoutFreq: { type: string, nullable: true }
+        dayCountConv: { type: string, nullable: true }
         tenureMonths: { type: integer }
         openDt: { type: string, format: date }
         valueDt: { type: string, format: date }
         matDt: { type: string, format: date }
-        matAmt: { type: number, format: double }
+        matAmt: { $ref: '#/components/schemas/NullableDecimalAmount' }
         matInstruction: { type: string }
         status:
           type: string
@@ -842,8 +848,9 @@ components:
         lastCaptlzDt: { type: string, format: date, nullable: true }
         closureDt: { type: string, format: date, nullable: true }
         renewedFromId: { type: string, nullable: true }
-        custNameSnap: { type: string }
-        prdNameSnap: { type: string }
+        custNameSnap: { type: string, nullable: true }
+        prdNameSnap: { type: string, nullable: true }
+        taxEnabled: { type: boolean, description: Demo withholding eligibility snapshotted at booking; legacy accounts are false }
         ccyDecimals: { type: integer }
 
     FdTransaction:
@@ -856,9 +863,9 @@ components:
           type: string
           enum: [DEPOSIT, WITHDRAWAL, INTEREST, PENALTY, MATURITY_PAYOUT, TDS]
         drCr: { type: string, enum: [D, C] }
-        amt: { type: number, format: double }
-        balBefore: { type: number, format: double }
-        balAfter: { type: number, format: double }
+        amt: { $ref: '#/components/schemas/DecimalAmount' }
+        balBefore: { $ref: '#/components/schemas/DecimalAmount' }
+        balAfter: { $ref: '#/components/schemas/DecimalAmount' }
         ccyCd: { type: string }
         txnDt: { type: string, format: date }
         valueDt: { type: string, format: date }
@@ -872,11 +879,11 @@ components:
         fdaId: { type: string }
         acctNum: { type: string }
         custNameSnap: { type: string }
-        principalAmt: { type: number, format: double }
+        principalAmt: { $ref: '#/components/schemas/DecimalAmount' }
         intRt: { type: number, format: double }
         openDt: { type: string, format: date }
         matDt: { type: string, format: date }
-        matAmt: { type: number, format: double }
+        matAmt: { $ref: '#/components/schemas/DecimalAmount' }
         issuedTs: { type: string, format: date-time }
 
     WithdrawalQuote:
@@ -884,16 +891,18 @@ components:
       required: [withdrawalDate, interestEarned, finalInterest, penaltyApplied, withdrawalAmount]
       properties:
         withdrawalDate: { type: string, format: date }
-        interestEarned: { type: number, minimum: 0, description: Lifetime interest including capitalizations and SIMPLE interest already paid out }
-        finalInterest: { type: number, minimum: 0, description: Interest since the last boundary credited at closure }
-        penaltyApplied: { type: number, minimum: 0 }
-        withdrawalAmount: { type: number, minimum: 0, description: "Net payment at closure, excluding interest already paid out" }
+        interestEarned: { $ref: '#/components/schemas/DecimalAmount' }
+        finalInterest: { $ref: '#/components/schemas/DecimalAmount' }
+        penaltyApplied: { $ref: '#/components/schemas/DecimalAmount' }
+        withdrawalAmount: { $ref: '#/components/schemas/DecimalAmount' }
+        taxDeducted: { $ref: '#/components/schemas/DecimalAmount' }
       example:
         withdrawalDate: '2026-07-16'
-        interestEarned: 3525.06
-        finalInterest: 275.80
-        penaltyApplied: 35.25
-        withdrawalAmount: 103489.81
+        interestEarned: '3525.06'
+        finalInterest: '275.80'
+        penaltyApplied: '35.25'
+        withdrawalAmount: '103489.81'
+        taxDeducted: '0.00'
 
     PrematureWithdrawalResult:
       type: object
@@ -901,15 +910,16 @@ components:
         status: { type: string, example: success }
         message: { type: string }
         withdrawalDate: { type: string, format: date }
-        interestEarned: { type: number, format: double, description: All INTEREST posted over the account's life (penalty base) }
-        finalInterest: { type: number, format: double, description: "Interest since the last boundary, credited at closure" }
-        penaltyApplied: { type: number, format: double }
-        withdrawalAmount: { type: number, format: double }
+        interestEarned: { $ref: '#/components/schemas/DecimalAmount' }
+        finalInterest: { $ref: '#/components/schemas/DecimalAmount' }
+        penaltyApplied: { $ref: '#/components/schemas/DecimalAmount' }
+        withdrawalAmount: { $ref: '#/components/schemas/DecimalAmount' }
+        taxDeducted: { $ref: '#/components/schemas/DecimalAmount' }
         account: { $ref: '#/components/schemas/FdAccount' }
         txnGrpId: { type: string, format: uuid, description: Closure event reference }
         transactionIds:
           type: array
-          description: Final interest, penalty and withdrawal row IDs in the closure group (only positive postings)
+          description: Final interest, tax, penalty and withdrawal row IDs in the closure group
           items: { type: integer, format: int64 }
 
     BusinessClock:
@@ -939,6 +949,17 @@ components:
         startTs: { type: string, format: date-time }
         endTs: { type: string, format: date-time }
         errorMsg: { type: string, nullable: true }
+
+    DecimalInput:
+      description: Exact decimal strings are preferred; JSON numbers remain accepted for compatibility.
+      oneOf:
+        - { type: string, pattern: '^[0-9]+(\.[0-9]+)?$' }
+        - { type: number }
+
+    NullableDecimalAmount:
+      type: string
+      nullable: true
+      pattern: '^-?[0-9]+(\.[0-9]+)?$'
 
     DecimalAmount:
       type: string
@@ -1002,6 +1023,8 @@ components:
         transactionId: {"type": "integer", "format": "int64"}
         date: {"type": "string", "format": "date"}
         netDeduction: {"$ref": "#/components/schemas/DecimalAmount"}
+        policyVersion: { type: string, nullable: true }
+        taxableAmount: { type: string, nullable: true }
 
     StatementReportRow:
       type: object
