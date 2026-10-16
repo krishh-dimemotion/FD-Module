@@ -1,6 +1,15 @@
-// Backend is a separate app (dev/backend/fdservice) on its own origin — every
-// call here goes over CORS with a full URL, never a relative path.
-const API_BASE_URL = 'http://localhost:8081';
+// The local gateway routes both FD and report APIs; an override can target another base.
+const apiBaseOverride = new URLSearchParams(window.location.search).get('apiBase');
+const API_BASE_URL = (apiBaseOverride || 'http://localhost:8080/fd/v1').replace(/\/$/, '');
+
+// Keep an explicitly chosen backend when moving between screens.
+if (apiBaseOverride) {
+  document.querySelectorAll('.topnav a').forEach(link => {
+    const url = new URL(link.href);
+    url.searchParams.set('apiBase', apiBaseOverride);
+    link.href = url.href;
+  });
+}
 
 /**
  * Calls the backend and resolves with the parsed JSON body on 2xx.

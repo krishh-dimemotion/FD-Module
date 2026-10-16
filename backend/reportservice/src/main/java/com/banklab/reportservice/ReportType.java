@@ -1,0 +1,4 @@
+package com.banklab.reportservice;
+public enum ReportType {
+    PORTFOLIO_SUMMARY, TDS_COMPLIANCE, MATURITY_SCHEDULE, TOTAL_LIABILITY, MONTHLY_GROWTH, ACCOUNT_STATEMENT
+}

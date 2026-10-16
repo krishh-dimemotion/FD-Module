@@ -3,7 +3,7 @@ info:
   title: Fixed Deposit (FD) Account Module API
   description: >
     REST API for the Fixed Deposit Account Module (Group 3), Banking Technology
-    Lab (CSF 3142). Owns fd_db (MSSQL). Covers account lifecycle, transactions,
+    Lab (CSF 3142). Owns fd_db (MySQL). Covers account lifecycle, transactions,
     interest, early withdrawal, maturity/renewal, receipts, reporting, and
     batch-job triggers. See fd_module_api_justification.md for the
     action-to-endpoint mapping and the rationale for what was excluded.
@@ -12,7 +12,7 @@ info:
     name: Group 3 — Fixed Deposit Module
 servers:
   - url: https://api.banklab.local/fd/v1
-    description: FD module base path (behind API gateway; gateway resolves JWT -> CUST_ID)
+    description: Gateway contract; local lab equivalent is http://localhost:8080/fd/v1. Local access is open; JWT resolution is future integration.
 
 tags:
   - name: Accounts
@@ -27,6 +27,8 @@ tags:
     description: Term deposit receipt generation
   - name: Reports
     description: Reporting endpoints (report-service, reads fd_db directly)
+  - name: Exchange Rates
+    description: Dated local DEMO rates and illustrative conversion
   - name: Batch
     description: Admin-triggered batch job runs (accrual, maturity)
 
@@ -450,45 +452,84 @@ paths:
   /reports/fd-accounts:
     get:
       tags: [Reports]
-      summary: Generate account/portfolio reports (Action 18)
+      security: []
+      summary: Generate portfolio, liability, growth, compliance, maturity or statement reports
       description: >
-        Stateless — report-service reads fd_db directly. Uses snapshotted
-        display fields (FDA_CUST_NAME_SNAP, FDA_PRD_NAME_SNAP) to avoid
-        cross-module joins. OPEN ITEM — by-user reports take a userId, but
-        no FD table stores USR_ID (only CUST_ID). Per the recommended fix,
-        this endpoint expects the gateway to resolve USR_ID -> CUST_ID from
-        the JWT and pass custId; it does not accept a raw userId param.
+        Local lab demo: custId is an operations filter, not authenticated customer identity.
+        The separate report service reads fd_db with SELECT-only credentials and calls no
+        upstream services. Dates are inclusive business posting dates. Portfolio dates
+        filter opening dates; liability is the current stored position and rejects date filters.
+        Growth defaults to twelve calendar months through the business date; TDS defaults
+        to April 1 through the business date; statements default to account opening through
+        the business date. Maturity defaults to business date through twelve months ahead.
+        Only maturity schedules allow future toDate. Monetary values are decimal strings;
+        totals remain separate by currency. See README for accounting definitions and CSV sections.
       operationId: getFdAccountReport
       parameters:
-        - name: fromDate
-          in: query
-          schema: { type: string, format: date }
-        - name: toDate
-          in: query
-          schema: { type: string, format: date }
-        - name: custId
-          in: query
-          schema: { type: string }
-          description: Resolved server-side from JWT by the gateway, not client-supplied
-        - name: reportType
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [PORTFOLIO_SUMMARY, TDS_COMPLIANCE, MATURITY_SCHEDULE]
+        - { name: reportType, in: query, required: true, schema: { $ref: '#/components/schemas/ReportType' } }
+        - { name: custId, in: query, schema: { type: string }, description: 'Primary customer or OWNER role; operations/demo filter.' }
+        - { name: accountId, in: query, schema: { type: string, format: uuid }, description: Required for ACCOUNT_STATEMENT; optional account filter for other types. }
+        - { name: fromDate, in: query, schema: { type: string, format: date } }
+        - { name: toDate, in: query, schema: { type: string, format: date } }
+        - { name: format, in: query, schema: { type: string, enum: [json, csv], default: json } }
       responses:
         '200':
-          description: Report data
+          description: Report rows and totals, or a CSV attachment with ROW/TOTAL/WARNING/METADATA sections.
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  reportType: { type: string }
-                  generatedAt: { type: string, format: date-time }
-                  rows:
-                    type: array
-                    items: { type: object }
+              schema: { $ref: '#/components/schemas/ReportResult' }
+            text/csv:
+              schema: { type: string }
+        '400': { description: "Missing or invalid parameter, invalid date range, or unsupported liability date filters." }
+        '404': { description: "Selected account does not exist or does not match custId." }
+        '422': { description: "INCOMPLETE_LEDGER_HISTORY, INCOMPLETE_ACCOUNT_BALANCE, or INVALID_CURRENCY_PRECISION." }
+        '503': { description: "REPORT_DATA_UNAVAILABLE." }
+
+  /exchange-rates:
+    get:
+      tags: [Exchange Rates]
+      security: []
+      operationId: getDemoExchangeRates
+      summary: Look up dated local demo exchange rates
+      description: >
+        Invented DEMO data only. Selects the latest configured rate set on or before date;
+        defaults to the business date. Rates are currency units per one unit of base.
+        No rate is selected from the future. This does not convert report totals or postings.
+      parameters:
+        - { name: base, in: query, schema: { type: string, default: INR } }
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Effective dated demo rate set
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExchangeRateSet' }
+        '400': { description: "Invalid ISO currency or date." }
+        '404': { description: "CURRENCY_NOT_SUPPORTED or RATE_NOT_FOUND." }
+
+  /exchange-rates/convert:
+    get:
+      tags: [Exchange Rates]
+      security: []
+      operationId: convertDemoCurrency
+      summary: Convert an amount using dated local demo rates
+      description: >
+        Decimal arithmetic; HALF_UP rounding to the target currency's minor units.
+        amount must be nonnegative, with at most 30 significant digits and scale between -12 and 12.
+        Defaults to the business date when date is omitted.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string } }
+        - { name: to, in: query, required: true, schema: { type: string } }
+        - { name: amount, in: query, required: true, schema: { $ref: '#/components/schemas/DecimalAmount' } }
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Illustrative conversion with effective date and DEMO source
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExchangeConversion' }
+        '400': { description: "Invalid amount, currency or date." }
+        '404': { description: "CURRENCY_NOT_SUPPORTED or RATE_NOT_FOUND." }
 
   /batch-jobs/{jobName}/runs:
     post:
@@ -846,7 +887,7 @@ components:
         interestEarned: { type: number, minimum: 0, description: Lifetime interest including capitalizations and SIMPLE interest already paid out }
         finalInterest: { type: number, minimum: 0, description: Interest since the last boundary credited at closure }
         penaltyApplied: { type: number, minimum: 0 }
-        withdrawalAmount: { type: number, minimum: 0, description: Net payment at closure, excluding interest already paid out }
+        withdrawalAmount: { type: number, minimum: 0, description: "Net payment at closure, excluding interest already paid out" }
       example:
         withdrawalDate: '2026-07-16'
         interestEarned: 3525.06
@@ -861,7 +902,7 @@ components:
         message: { type: string }
         withdrawalDate: { type: string, format: date }
         interestEarned: { type: number, format: double, description: All INTEREST posted over the account's life (penalty base) }
-        finalInterest: { type: number, format: double, description: Interest since the last boundary, credited at closure }
+        finalInterest: { type: number, format: double, description: "Interest since the last boundary, credited at closure" }
         penaltyApplied: { type: number, format: double }
         withdrawalAmount: { type: number, format: double }
         account: { $ref: '#/components/schemas/FdAccount' }
@@ -898,3 +939,147 @@ components:
         startTs: { type: string, format: date-time }
         endTs: { type: string, format: date-time }
         errorMsg: { type: string, nullable: true }
+
+    DecimalAmount:
+      type: string
+      pattern: '^-?[0-9]+(\.[0-9]+)?$'
+      example: '100000.00'
+    ReportType:
+      type: string
+      enum: [PORTFOLIO_SUMMARY, TDS_COMPLIANCE, MATURITY_SCHEDULE, TOTAL_LIABILITY, MONTHLY_GROWTH, ACCOUNT_STATEMENT]
+
+    AccountReportRow:
+      type: object
+      required: ["accountId", "accountNumber", "customerId", "productCode", "currency", "status", "customerName", "productName", "openDate", "maturityDate", "principal", "depositBalance", "accruedInterest", "totalLiability", "projectedMaturityAmount"]
+      properties:
+        accountId: {"type": "string"}
+        accountNumber: {"type": "string"}
+        customerId: {"type": "string"}
+        productCode: {"type": "string"}
+        currency: {"type": "string"}
+        status: {"type": "string"}
+        customerName: {"type": "string", "nullable": true}
+        productName: {"type": "string", "nullable": true}
+        openDate: {"type": "string", "format": "date"}
+        maturityDate: {"type": "string", "format": "date"}
+        principal: {"$ref": "#/components/schemas/DecimalAmount"}
+        depositBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+        accruedInterest: {"$ref": "#/components/schemas/DecimalAmount"}
+        totalLiability: {"$ref": "#/components/schemas/DecimalAmount"}
+        projectedMaturityAmount: {"type": "string", "nullable": true}
+
+    GrowthReportRow:
+      type: object
+      required: ["month", "currency", "fromDate", "toDate", "openingBalance", "closingBalance", "netGrowth", "newDeposits", "closurePayouts", "renewalIn", "renewalOut", "growthPercent", "accountsOpened", "accountsClosed"]
+      properties:
+        month: {"type": "string"}
+        currency: {"type": "string"}
+        fromDate: {"type": "string", "format": "date"}
+        toDate: {"type": "string", "format": "date"}
+        openingBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+        closingBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+        netGrowth: {"$ref": "#/components/schemas/DecimalAmount"}
+        newDeposits: {"$ref": "#/components/schemas/DecimalAmount"}
+        closurePayouts: {"$ref": "#/components/schemas/DecimalAmount"}
+        renewalIn: {"$ref": "#/components/schemas/DecimalAmount"}
+        renewalOut: {"$ref": "#/components/schemas/DecimalAmount"}
+        growthPercent: {"type": "string", "nullable": true, "description": "Four decimals; null when opening balance is zero."}
+        accountsOpened: {"type": "integer", "format": "int64"}
+        accountsClosed: {"type": "integer", "format": "int64"}
+
+    TdsReportRow:
+      type: object
+      required: ["accountId", "accountNumber", "customerId", "currency", "financialYear", "customerName", "pan", "taxRate", "transactionId", "date", "netDeduction"]
+      properties:
+        accountId: {"type": "string"}
+        accountNumber: {"type": "string"}
+        customerId: {"type": "string"}
+        currency: {"type": "string"}
+        financialYear: {"type": "string"}
+        customerName: {"type": "string", "nullable": true}
+        pan: {"type": "string", "nullable": true}
+        taxRate: {"type": "string", "nullable": true}
+        transactionId: {"type": "integer", "format": "int64"}
+        date: {"type": "string", "format": "date"}
+        netDeduction: {"$ref": "#/components/schemas/DecimalAmount"}
+
+    StatementReportRow:
+      type: object
+      required: ["type", "direction", "currency", "transactionId", "date", "amount", "balanceChange", "runningBalance", "remarks"]
+      properties:
+        type: {"type": "string"}
+        direction: {"type": "string"}
+        currency: {"type": "string"}
+        transactionId: {"type": "integer", "format": "int64"}
+        date: {"type": "string", "format": "date"}
+        amount: {"$ref": "#/components/schemas/DecimalAmount"}
+        balanceChange: {"$ref": "#/components/schemas/DecimalAmount"}
+        runningBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+        remarks: {"type": "string", "nullable": true}
+
+    CurrencyReportTotal:
+      type: object
+      required: ["currency", "accountCount", "depositBalance", "accruedInterest", "totalLiability"]
+      properties:
+        currency: {"type": "string"}
+        accountCount: {"type": "integer", "format": "int64"}
+        depositBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+        accruedInterest: {"$ref": "#/components/schemas/DecimalAmount"}
+        totalLiability: {"$ref": "#/components/schemas/DecimalAmount"}
+
+    TdsReportTotal:
+      type: object
+      required: ["customerId", "financialYear", "currency", "netDeduction"]
+      properties:
+        customerId: {"type": "string"}
+        financialYear: {"type": "string"}
+        currency: {"type": "string"}
+        netDeduction: {"$ref": "#/components/schemas/DecimalAmount"}
+
+    StatementReportTotal:
+      type: object
+      required: ["accountId", "accountNumber", "customerId", "currency", "customerName", "openingBalance", "closingBalance"]
+      properties:
+        accountId: {"type": "string"}
+        accountNumber: {"type": "string"}
+        customerId: {"type": "string"}
+        currency: {"type": "string"}
+        customerName: {"type": "string", "nullable": true}
+        openingBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+        closingBalance: {"$ref": "#/components/schemas/DecimalAmount"}
+
+    ReportResult:
+      type: object
+      required: ["reportType", "generatedAt", "businessDate", "fromDate", "toDate", "rows", "totals", "warnings"]
+      properties:
+        reportType: {"$ref": "#/components/schemas/ReportType"}
+        generatedAt: {"type": "string", "format": "date-time"}
+        businessDate: {"type": "string", "format": "date"}
+        fromDate: {"type": "string", "format": "date", "nullable": true}
+        toDate: {"type": "string", "format": "date"}
+        rows: {"type": "array", "items": {"anyOf": [{"$ref": "#/components/schemas/AccountReportRow"}, {"$ref": "#/components/schemas/GrowthReportRow"}, {"$ref": "#/components/schemas/TdsReportRow"}, {"$ref": "#/components/schemas/StatementReportRow"}]}}
+        totals: {"type": "array", "items": {"anyOf": [{"$ref": "#/components/schemas/CurrencyReportTotal"}, {"$ref": "#/components/schemas/TdsReportTotal"}, {"$ref": "#/components/schemas/StatementReportTotal"}]}}
+        warnings: {"type": "array", "items": {"type": "string"}}
+
+    ExchangeRateSet:
+      type: object
+      required: ["source", "base", "requestedDate", "effectiveDate", "rates"]
+      properties:
+        source: {"type": "string", "enum": ["DEMO"]}
+        base: {"type": "string"}
+        requestedDate: {"type": "string", "format": "date"}
+        effectiveDate: {"type": "string", "format": "date"}
+        rates: {"type": "object", "additionalProperties": {"$ref": "#/components/schemas/DecimalAmount"}}
+
+    ExchangeConversion:
+      type: object
+      required: ["source", "from", "to", "requestedDate", "effectiveDate", "amount", "rate", "convertedAmount"]
+      properties:
+        source: {"type": "string", "enum": ["DEMO"]}
+        from: {"type": "string"}
+        to: {"type": "string"}
+        requestedDate: {"type": "string", "format": "date"}
+        effectiveDate: {"type": "string", "format": "date"}
+        amount: {"$ref": "#/components/schemas/DecimalAmount"}
+        rate: {"$ref": "#/components/schemas/DecimalAmount"}
+        convertedAmount: {"$ref": "#/components/schemas/DecimalAmount"}

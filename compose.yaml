@@ -1,0 +1,103 @@
+name: fd-module
+x-java: &java
+  image: maven:3.9-eclipse-temurin-21
+  volumes:
+    - .:/workspace
+    - maven-cache:/root/.m2
+  working_dir: /workspace/backend/fdservice
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Copy .env.example to .env and set local passwords}
+      FD_DB_PASSWORD: ${FD_DB_PASSWORD:?Set FD_DB_PASSWORD}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:?Set REPORT_DB_PASSWORD}
+      TEST_DB_PASSWORD: ${TEST_DB_PASSWORD:?Set TEST_DB_PASSWORD}
+    command: [--lower-case-table-names=1]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-fd.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h localhost --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 40
+  fd:
+    <<: *java
+    command: [sh, -c, 'sh mvnw -q -DskipTests package && exec java -jar target/fdservice-0.0.1-SNAPSHOT.jar --server.port=8081']
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/fd_db
+      SPRING_DATASOURCE_USERNAME: fd_app
+      SPRING_DATASOURCE_PASSWORD: ${FD_DB_PASSWORD}
+      SPRING_JPA_SHOW_SQL: 'false'
+      FD_BUSINESS_CLOCK_SEED_DATE: '2026-01-01'
+      FD_BATCH_SCHEDULER_ENABLED: 'false'
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://localhost:8081/business-clock >/dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    ports: ['127.0.0.1:8081:8081']
+    depends_on:
+      mysql: {condition: service_healthy}
+  reports:
+    <<: *java
+    working_dir: /workspace/backend/reportservice
+    command: [sh, -c, 'sh ../fdservice/mvnw -q -DskipTests package && exec java -jar target/reportservice-0.0.1-SNAPSHOT.jar']
+    environment:
+      REPORT_DB_URL: jdbc:mysql://mysql:3306/fd_db
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD}
+      FX_RATES_LOCATION: ${FX_RATES_LOCATION:-classpath:demo-rates.properties}
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://localhost:8083/health >/dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    ports: ['127.0.0.1:8083:8083']
+    depends_on:
+      mysql: {condition: service_healthy}
+  gateway:
+    image: node:24-alpine
+    working_dir: /workspace/gateway
+    volumes: ['./gateway:/workspace/gateway:ro']
+    command: [node, server.mjs]
+    environment:
+      FD_UPSTREAM: http://fd:8081
+      REPORT_UPSTREAM: http://reports:8083
+      ALLOWED_ORIGIN: http://localhost:3000
+    depends_on:
+      fd: {condition: service_healthy}
+      reports: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports: ['127.0.0.1:8080:8080']
+  frontend:
+    image: node:24-alpine
+    working_dir: /workspace/frontend
+    volumes: ['./frontend:/workspace/frontend:ro']
+    command: [node, server.js]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports: ['127.0.0.1:3000:3000']
+  verify:
+    <<: *java
+    profiles: [test]
+    network_mode: service:mysql
+    command: [sh, -c, 'sh mvnw -q clean verify && sh mvnw -q -f ../reportservice/pom.xml clean verify']
+    environment:
+      SPRING_DATASOURCE_USERNAME: fd_test
+      SPRING_DATASOURCE_PASSWORD: ${TEST_DB_PASSWORD}
+      REPORT_TEST_PASSWORD: ${TEST_DB_PASSWORD}
+    depends_on:
+      mysql: {condition: service_healthy}
+volumes:
+  mysql-data:
+  maven-cache:

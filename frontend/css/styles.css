@@ -393,3 +393,16 @@ td.empty {
   color: var(--error-text);
   border-color: transparent;
 }
+
+/* Reports retain exact decimal text and contain wide tables on small screens. */
+.topnav { flex-wrap: wrap; }
+.inline-form > label { max-width: 100%; }
+.inline-form select { max-width: 100%; }
+#report-status { font-size: .9rem; color: var(--muted); }
+#fx-result { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {
+  .page { padding: 1.25rem .75rem 3rem; }
+  .panel { padding: 1rem .75rem; }
+  .inline-form > label { width: 100%; }
+  .inline-form input { width: 100%; min-width: 0; }
+}

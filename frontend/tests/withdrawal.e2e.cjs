@@ -7,6 +7,8 @@ const { chromium } = require(process.env.FD_PLAYWRIGHT_MODULE || 'playwright');
 
 async function main() {
   assert.equal(process.env.FD_E2E_ISOLATED_DB, '1', 'Set FD_E2E_ISOLATED_DB=1 only for an isolated test backend.');
+  const apiBase = process.env.FD_API_BASE || 'http://localhost:8080/fd/v1';
+  const frontendBase = process.env.FD_FRONTEND_BASE || 'http://localhost:3000';
   const browser = await chromium.launch({ headless: true, channel: process.env.FD_BROWSER_CHANNEL || undefined });
   const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
   const errors = [];
@@ -16,7 +18,7 @@ async function main() {
     if (request.method() === 'POST' && request.url().endsWith('/withdraw')) submissions++;
   });
   const api = async (method, endpoint, data) => {
-    const response = await page.request.fetch(`http://localhost:8080${endpoint}`, { method, data });
+    const response = await page.request.fetch(`${apiBase}${endpoint}`, { method, data });
     assert(response.ok(), `${method} ${endpoint}: ${response.status()} ${await response.text()}`);
     return response.json();
   };
@@ -29,7 +31,7 @@ async function main() {
       initialRoles: [{ custId: 'CUST-001', roleType: 'OWNER', isPrimary: true }],
     });
     await api('PUT', '/business-clock', { businessDate: '2026-07-16' });
-    await page.goto('http://localhost:3000/withdraw.html');
+    await page.goto(`${frontendBase}/withdraw.html?apiBase=${encodeURIComponent(apiBase)}`);
     await page.getByLabel('Account number', { exact: true }).fill('does-not-exist');
     await page.getByRole('button', { name: 'Find account', exact: true }).click();
     await page.getByRole('alert').filter({ hasText: 'could not find' }).waitFor();

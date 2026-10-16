@@ -50,6 +50,8 @@ class DatasourceConfigurationTest {
         String locations = System.getProperty("spring.config.location");
         assertThat(locations).as("Surefire must configure profile-aware location grouping").isNotBlank();
         return new ApplicationContextRunner()
+                // These tests exercise file/profile precedence, independently of deployment env overrides.
+                .withInitializer(context -> context.getEnvironment().getPropertySources().remove("systemEnvironment"))
                 .withInitializer(new ConfigDataApplicationContextInitializer())
                 .withPropertyValues("spring.profiles.active=" + profile,
                         "spring.config.location=" + locations + ";optional:" + localConfig.toUri());
